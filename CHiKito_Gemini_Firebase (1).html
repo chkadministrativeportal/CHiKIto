@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=0.5, user-scalable=yes">
+  <title>CHiKito – CHK Admin Chatbot</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    html, body {
+      width: 100%; height: 100%; margin: 0;
+      font-family: Montserrat, sans-serif;
+      background: linear-gradient(160deg, #500 0%, #3a0000 40%, #06402b 100%);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .page-hint {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center; color: rgba(255,255,255,0.35);
+      font-size: 13px; letter-spacing: 1px;
+      pointer-events: none; user-select: none;
+    }
+    .page-hint span { display: block; font-size: 28px; margin-bottom: 10px; }
+
+    :root {
+      --chk-maroon:      #500000;
+      --chk-maroon-dark: #3a0000;
+      --chk-green:       #06402b;
+      --chk-green-light: #0a5c3c;
+      --chk-text:        #ffffff;
+      --chk-radius:      20px;
+      --chk-radius-sm:   10px;
+    }
+
+    #chk-bot-root * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Venue dropdown */
+    .chk-venue-dropdown {
+      display: flex; flex-direction: column;
+      margin-top: 8px; border-radius: 10px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .chk-venue-dropdown a {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 11px; font-size: 12.5px; color: #e8d9a0;
+      text-decoration: none; background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      transition: background 0.15s, color 0.15s;
+      font-family: Montserrat, sans-serif; font-weight: 600; letter-spacing: 0.2px;
+    }
+    .chk-venue-dropdown a:last-child { border-bottom: none; }
+    .chk-venue-dropdown a:hover, .chk-venue-dropdown a:active {
+      background: rgba(139,0,0,0.35); color: #fff;
+    }
+    .chk-vicon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+
+    /* Floating launcher */
+    #chk-bot-launcher {
+      position: fixed; bottom: 28px; right: 28px;
+      z-index: 9999999;
+      display: flex; align-items: center; gap: 6px;
+      cursor: grab; user-select: none; -webkit-user-select: none;
+      touch-action: none; will-change: transform, left, top;
+      animation: chk-float 3.6s ease-in-out infinite;
+      filter: drop-shadow(0 8px 24px rgba(139,0,0,.55)) drop-shadow(0 2px 8px rgba(0,0,0,.4));
+      transition: filter .2s;
+    }
+    #chk-bot-launcher.chk-dragging {
+      cursor: grabbing; animation: none !important;
+      filter: drop-shadow(0 14px 30px rgba(139,0,0,.75)) drop-shadow(0 4px 12px rgba(0,0,0,.5));
+      transition: none;
+    }
+    #chk-bot-launcher:hover:not(.chk-dragging) {
+      filter: drop-shadow(0 12px 32px rgba(139,0,0,.8)) drop-shadow(0 4px 12px rgba(0,0,0,.5));
+      animation-play-state: paused;
+    }
+    @keyframes chk-float {
+      0%,100% { transform: translateY(0)    rotate3d(1,.5,0,  0deg) scale(1);    }
+      25%      { transform: translateY(-6px) rotate3d(1,.5,0, -2deg) scale(1.02); }
+      50%      { transform: translateY(-10px)rotate3d(1,.5,0,  0deg) scale(1.03); }
+      75%      { transform: translateY(-5px) rotate3d(1,.5,0,  2deg) scale(1.02); }
+    }
+
+    #chk-wave-emoji {
+      font-size: 22px; animation: chk-wave-hand 1.8s ease-in-out infinite;
+      transform-origin: 70% 80%; pointer-events: none;
+    }
+    @keyframes chk-wave-hand {
+      0%,100% { transform: rotate(0deg); }
+      15%     { transform: rotate(20deg); }
+      30%     { transform: rotate(-8deg); }
+      45%     { transform: rotate(18deg); }
+      60%     { transform: rotate(-4deg); }
+    }
+
+    #chk-bot-btn {
+      width: 62px; height: 62px; border-radius: 50%;
+      background: transparent; border: none;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; flex-shrink: 0; position: relative;
+      box-shadow:
+        0 0 0 3px rgba(139,0,0,.5),
+        0 0 0 6px rgba(26,107,26,.3),
+        0 8px 24px rgba(139,0,0,.6),
+        inset 0 1px 1px rgba(255,255,255,.12);
+      transition: transform .18s, box-shadow .18s;
+    }
+    #chk-bot-btn:hover {
+      transform: scale(1.1) translateY(-2px);
+      box-shadow:
+        0 0 0 4px rgba(139,0,0,.7),
+        0 0 0 8px rgba(26,107,26,.4),
+        0 14px 32px rgba(139,0,0,.8),
+        inset 0 1px 1px rgba(255,255,255,.2);
+    }
+    #chk-btn-fallback {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 100%; font-size: 22px; color: #fff; font-weight: 700;
+      border-radius: 50%; background: linear-gradient(145deg,#8b0000,#c0392b);
+      position: absolute;
+    }
+
+    /* Chat window */
+    #chk-chat-win {
+      position: fixed; z-index: 9999998;
+      width: 360px; max-height: 600px; border-radius: 18px;
+      background: #1c1c1c; border: 1px solid rgba(139,0,0,.35);
+      box-shadow:
+        0 20px 60px rgba(0,0,0,.65),
+        0 4px 20px rgba(139,0,0,.25),
+        0 0 0 1px rgba(26,107,26,.15),
+        inset 0 1px 0 rgba(255,255,255,.06);
+      display: flex; flex-direction: column; overflow: hidden;
+      opacity: 0; pointer-events: none;
+      transform: scale(.88) translateY(18px) perspective(600px) rotateX(4deg);
+      transition: opacity .26s cubic-bezier(.34,1.4,.64,1), transform .26s cubic-bezier(.34,1.4,.64,1);
+      bottom: 106px; right: 28px;
+    }
+    #chk-chat-win.chk-open {
+      opacity: 1;
+      transform: scale(1) translateY(0) perspective(600px) rotateX(0deg);
+      pointer-events: all;
+    }
+    #chk-chat-win:hover:not(.chk-win-dragging) {
+      box-shadow:
+        0 26px 72px rgba(0,0,0,.7),
+        0 6px 24px rgba(139,0,0,.3),
+        0 0 0 1px rgba(26,107,26,.2),
+        inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    @media (max-width: 520px) {
+      #chk-chat-win { width: calc(100vw - 16px); max-height: 82vh; border-radius: 16px; }
+      #chk-bot-launcher { bottom: 18px; right: 18px; }
+      #chk-bot-btn { width: 56px !important; height: 56px !important; }
+      #chk-wave-emoji { font-size: 18px !important; }
+    }
+
+    /* Header */
+    #chk-chat-header {
+      background: linear-gradient(135deg, #5a0000 0%, #8b0000 45%, #0d4a0d 100%);
+      padding: 14px 16px 10px; cursor: move;
+      user-select: none; -webkit-user-select: none;
+      flex-shrink: 0; position: relative;
+      box-shadow: 0 2px 10px rgba(0,0,0,.4), inset 0 -1px 0 rgba(0,0,0,.3);
+    }
+    #chk-chat-header::before {
+      content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+      background: linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);
+      animation: chk-sheen 5s ease-in-out infinite; pointer-events: none;
+    }
+    @keyframes chk-sheen { 0%,100%{left:-100%} 50%{left:140%} }
+    #chk-header-top  { display: flex; align-items: center; justify-content: space-between; }
+    #chk-header-left { display: flex; align-items: center; gap: 10px; }
+    #chk-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.5);
+      box-shadow: 0 2px 8px rgba(0,0,0,.4),0 0 0 3px rgba(139,0,0,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; overflow: hidden;
+      transition: transform .2s, box-shadow .2s; background: #8b0000;
+    }
+    #chk-avatar:hover {
+      transform: scale(1.1) rotate(-5deg);
+      box-shadow: 0 4px 12px rgba(0,0,0,.5),0 0 0 4px rgba(139,0,0,.5);
+    }
+    #chk-header-title strong { display: block; font-size: 15px; letter-spacing: .3px; color: #fff; }
+    #chk-header-title span   { font-size: 11px; opacity: .75; color: #fff; }
+    #chk-header-btns { display: flex; align-items: center; gap: 6px; }
+    #chk-close-btn {
+      background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; width: 28px; height: 28px; border-radius: 50%;
+      font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, transform .15s;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3); flex-shrink: 0;
+      min-width: 36px; min-height: 36px;
+    }
+    #chk-close-btn:hover { background: rgba(255,80,80,.4); transform: rotate(90deg) scale(1.1); }
+    #chk-refresh-btn {
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; width: 28px; height: 28px; border-radius: 50%;
+      font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, transform .3s;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3); flex-shrink: 0;
+      min-width: 36px; min-height: 36px; line-height: 1;
+    }
+    #chk-refresh-btn:hover { background: rgba(80,180,80,.4); transform: rotate(360deg) scale(1.1); }
+    #chk-beta-tag {
+      display: inline-block; margin-top: 8px;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25);
+      color: #ffe680; font-size: 10px; font-weight: 700;
+      letter-spacing: 1.2px; text-transform: uppercase;
+      padding: 2px 10px; border-radius: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+
+
+    /* Messages area */
+    #chk-messages {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      padding: 14px 14px 8px;
+      display: flex; flex-direction: column; gap: 10px;
+      background:
+        radial-gradient(ellipse at top right,rgba(139,0,0,.06) 0%,transparent 60%),
+        radial-gradient(ellipse at bottom left,rgba(26,107,26,.05) 0%,transparent 60%),
+        #141414;
+      -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    }
+    #chk-messages::-webkit-scrollbar { width: 3px; }
+    #chk-messages::-webkit-scrollbar-thumb { background: rgba(139,0,0,.45); border-radius: 3px; }
+
+    .chk-msg {
+      max-width: 88%; font-size: 13.5px; line-height: 1.6;
+      border-radius: 14px; padding: 9px 13px; word-break: break-word;
+      animation: chk-pop .22s cubic-bezier(.34,1.4,.64,1);
+    }
+    @keyframes chk-pop {
+      from { transform: scale(.88) translateY(8px); opacity: 0; }
+      to   { transform: scale(1)   translateY(0);  opacity: 1; }
+    }
+    .chk-msg.bot {
+      background: #242424; color: #e8e8e8;
+      border-bottom-left-radius: 4px; border-left: 3px solid #8b0000;
+      box-shadow: 0 2px 12px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);
+      align-self: flex-start;
+    }
+
+    .chk-msg.user {
+      background: linear-gradient(135deg,#6b0000 0%,#9b1818 100%);
+      color: #fff; border-bottom-right-radius: 4px; align-self: flex-end;
+      box-shadow: 0 3px 14px rgba(139,0,0,.45),inset 0 1px 0 rgba(255,255,255,.1);
+    }
+    .chk-msg a            { color: #f77; font-weight: 600; text-decoration: none; }
+    .chk-msg a:hover      { color: #ff9999; text-decoration: underline; }
+    .chk-msg.user a       { color: #ffe680; }
+    .chk-msg.user a:hover { color: #fff5aa; }
+
+
+
+    /* Quick-reply chips */
+    #chk-chips {
+      padding: 6px 12px 6px;
+      display: flex; flex-wrap: wrap; gap: 6px;
+      background: #141414; border-top: 1px solid rgba(255,255,255,.05);
+      flex-shrink: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    .chk-chip {
+      background: #1e1e1e; border: 1.5px solid rgba(139,0,0,.6);
+      color: #f88; font-size: 11.5px; font-weight: 600;
+      padding: 5px 13px; border-radius: 20px; cursor: pointer;
+      transition: background .15s, color .15s, transform .15s, box-shadow .15s;
+      white-space: nowrap; flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.05);
+      min-height: 32px;
+    }
+    .chk-chip:hover {
+      background: linear-gradient(135deg,#8b0000,#6b1f1f);
+      color: #fff; border-color: #c0392b;
+      transform: translateY(-2px) scale(1.04);
+      box-shadow: 0 6px 18px rgba(139,0,0,.45),inset 0 1px 0 rgba(255,255,255,.1);
+    }
+    .chk-chip:active { transform: translateY(0) scale(.98); }
+
+    /* Input bar */
+    #chk-input-row {
+      display: flex; align-items: center;
+      padding: 10px 12px; border-top: 1px solid rgba(139,0,0,.25);
+      background: #1a1a1a; gap: 8px; flex-shrink: 0;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,.2);
+    }
+    #chk-input {
+      flex: 1; border: 1.5px solid rgba(139,0,0,.4);
+      border-radius: 22px; padding: 9px 14px;
+      font-size: 14px; outline: none;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+      font-family: inherit; background: #111; color: #e8e8e8;
+      -webkit-appearance: none; appearance: none;
+    }
+    #chk-input::placeholder { color: rgba(255,255,255,.3); }
+    #chk-input:focus {
+      border-color: #8b0000; background: #161616;
+      box-shadow: 0 0 0 3px rgba(139,0,0,.2),0 2px 8px rgba(0,0,0,.3);
+    }
+    #chk-send-btn {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg,#8b0000,#c0392b);
+      border: none; color: #fff; font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: transform .15s, box-shadow .15s;
+      box-shadow: 0 3px 10px rgba(139,0,0,.45),inset 0 1px 0 rgba(255,255,255,.15);
+    }
+    #chk-send-btn:hover {
+      transform: scale(1.12) translateY(-1px);
+      box-shadow: 0 6px 18px rgba(139,0,0,.65),inset 0 1px 0 rgba(255,255,255,.2);
+      background: linear-gradient(135deg,#a00000,#d44);
+    }
+    #chk-send-btn:active { transform: scale(1); }
+
+    /* Typing indicator */
+    .chk-typing { display: flex; gap: 5px; align-items: center; padding: 4px 0; }
+    .chk-typing span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(139,0,0,.7);
+      animation: chk-bounce 1s infinite ease-in-out;
+      box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    .chk-typing span:nth-child(2){ animation-delay: .18s }
+    .chk-typing span:nth-child(3){ animation-delay: .36s }
+    @keyframes chk-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-7px)}}
+
+    /* Notice */
+    #chk-spreadsheet-notice {
+      text-align: center; font-size: 10px; color: rgba(255,255,255,.3);
+      padding: 4px 8px 6px; background: #141414;
+      border-top: 1px solid rgba(255,255,255,.05); flex-shrink: 0;
+    }
+    #chk-spreadsheet-notice span { color: rgba(26,107,26,.8); font-weight: 600; }
+  </style>
+</head>
+
+<body>
+  <div class="page-hint">
+    <span>🤖</span>
+    I-click ang button sa kanan<br>para makausap si CHiKito!
+  </div>
+
+  <div id="chk-bot-root">
+    <div id="chk-bot-launcher">
+      <span id="chk-wave-emoji">👋</span>
+      <button id="chk-bot-btn" aria-label="Open CHiKito chat">
+        <img id="chk-btn-img" src="https://drive.google.com/thumbnail?id=1th8W5b85mRrdBz21w1ltCLXUF4zVWGaN&sz=w200"
+          alt="CHiKito" style="width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;"
+          onerror="this.style.display='none';document.getElementById('chk-btn-fallback').style.display='flex';">
+        <div id="chk-btn-fallback" style="display:none;">CHK</div>
+      </button>
+    </div>
+
+    <div id="chk-chat-win" role="dialog" aria-label="CHiKito Chat">
+      <div id="chk-chat-header">
+        <div id="chk-header-top">
+          <div id="chk-header-left">
+            <div id="chk-avatar"><img src="https://drive.google.com/thumbnail?id=1th8W5b85mRrdBz21w1ltCLXUF4zVWGaN&sz=w80" alt="CHiKito" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.outerHTML='🤖'"></div>
+            <div id="chk-header-title">
+              <strong>CHiKito</strong>
+              <span>CHK Admin Assistant</span>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <div id="chk-beta-tag">BETA</div>
+              </div>
+            </div>
+          </div>
+          <div id="chk-header-btns">
+            <button id="chk-refresh-btn" title="Restart conversation">↺</button>
+            <button id="chk-close-btn" title="Close">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="chk-messages"></div>
+      <div id="chk-chips"></div>
+
+      <div id="chk-input-row">
+        <input id="chk-input" type="text" placeholder="Mag-type ng tanong..." autocomplete="off"/>
+        <button id="chk-send-btn" aria-label="Send">➤</button>
+      </div>
+
+      <div id="chk-spreadsheet-notice">
+        Powered by <span>CHK Admin Portal</span> · Embedded KB
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+  'use strict';
+
+  // ══════════════════════════════════════
+  // STATIC KNOWLEDGE BASE (instant, no network)
+  // ══════════════════════════════════════
+  const KB={
+   greet:{triggers:[],response:`Kumusta! 👋 Ako si <b>CHiKito</b>, ang inyong friendly assistant ng <b>CHK Administrative Portal</b>.<br><br>Uy tol, ano ang kailangan mo ngayon? Mabilis lang 'to.<br><i style="opacity:.7;font-size:12px">Pwede kang mag-type sa English o Tagalog! 🇵🇭</i>`,chips:['Reservations','Admin Forms','A.I.R.A.','Dashboards','Venue Calendars']},
+   reservations:{triggers:['reservation','reserve','book','booking','mag-reserve','mag-book','paano mag-reserve','paano mag-book','how to reserve','how to book'],response:`📋 <b>Reservations</b> — piliin ang uri, pre:<br><br>Dalawa lang ang choices mo:`,chips:['Venue Reservation','Vehicle Reservation','Venue Calendars']},
+   venue:{triggers:['venue reservation','venue form','sports facility','pasilidad','sports complex','reserve venue','book venue','mag-reserve ng venue'],response:`🏟 <b>Venue Reservation</b><br><br>Para mag-reserve ng sports facilities at iba pang venue, gamitin 'to.<br><i style="opacity:.65;font-size:12px">Fill in the form properly ha, pre. Babasahin naman nila 'yan.</i><br><br><a href="https://docs.google.com/forms/d/e/1FAIpQLSev3CV8mQ6YzfnugoWmSEkUgDEMt_cEDegbTKvKKHD9wwdsNA/viewform" target="_blank">→ Buksan ang Venue Reservation Form</a>`,chips:['Vehicle Reservation','Venue Calendars','Back to Menu']},
+   vehicle:{triggers:['vehicle reservation','vehicle form','car reservation','sasakyan','reserve vehicle','book vehicle','mag-reserve ng sasakyan'],response:`🚗 <b>Vehicle Reservation</b><br><br>Gusto mong mag-reserve ng opisyal na sasakyan? Dito ka mag-fill up, pre.<br><i style="opacity:.65;font-size:12px">Make sure may approval na 'yan bago ka mag-request. Just saying.</i><br><br><a href="https://docs.google.com/forms/d/e/1FAIpQLScRsNYHsOw1Iv_vW4Oy4A8j6vSRWEWl-Dr7Fpk8AhAxc2hJQA/viewform" target="_blank">→ Buksan ang Vehicle Reservation Form</a>`,chips:['Venue Reservation','Back to Menu']},
+   admin:{triggers:['admin form','admin online form','online form','admin forms','forms'],response:`🛠 <b>Admin Online Forms</b> — anong form ang kailangan mo, pre?`,chips:['Work Order','Fund Request','Meal Request','CHK RAP','PPMP','COS Wellness Leave']},
+   workorder:{triggers:['work order','work request','maintenance','repair','maintenance request','ayusin','repair request'],response:`🔧 <b>Work Order</b><br><br>May sira? May ayusin? Dito mo i-request, tol. Para naman maasikaso agad.<br><br><a href="https://docs.google.com/forms/d/e/1FAIpQLSd-Y_6cXUw10tbYKnim-Ib0dE_H0-B2ybodDhtl6YghuoTykQ/viewform" target="_blank">→ Buksan ang Work Order Form</a>`,chips:['Fund Request','Meal Request','Back to Menu']},
+   fundrequest:{triggers:['fund request','funding','budget request','financial request','pera','pondo','request ng budget'],response:`💰 <b>Fund Request</b><br><br>Kailangan ng pondo para sa aktibidad? I-request dito. Siguraduhing kumpleto ang docs mo, pre.<br><br><a href="https://docs.google.com/forms/d/e/1FAIpQLScoreOZ7Rq40KAispsuPzRkU5g90km3z8ZOzydvzX-CO_4kcQ/viewform" target="_blank">→ Buksan ang Fund Request Form</a>`,chips:['Work Order','Meal Request','Back to Menu']},
+   mealrequest:{triggers:['meal request','food request','pagkain','catering','meal allowance','meal','merienda request'],response:`🍱 <b>Meal Request</b><br><br>Para sa opisyal na request ng pagkain para sa mga aktibidad. Wag lang mag-abuso, pre.<br><br><a href="https://docs.google.com/forms/d/e/1FAIpQLScvj5sP0R1uNg8nlCDQDIBvimi-ci-aaaiOEbVLzpm9VTmPvQ/viewform" target="_blank">→ Buksan ang Meal Request Form</a>`,chips:['Work Order','Fund Request','Back to Menu']},
+   rap:{triggers:['chk rap','rap form','chk r.a.p.','rap'],response:`📝 <b>CHK R.A.P.</b><br><br>Report of Accomplishments and Plans. I-fill up mo 'to, pre. Part ng proseso, wag palampasin.<br><br><a href="https://docs.google.com/forms/d/e/1FAIpQLScRrTAuAreeO4YE1ywofYuos67WfGpMDEYoI0IGpTvCt0y9DQ/viewform" target="_blank">→ Buksan ang CHK R.A.P. Form</a>`,chips:['PPMP','COS Wellness Leave','Back to Menu']},
+   ppmp:{triggers:['ppmp','project procurement','procurement management','procurement plan'],response:`📊 <b>PPMP Online Form</b><br><br>Project Procurement Management Plan. Importante 'to ha, pre. I-accomplish ng maayos.<br><br><a href="https://script.google.com/a/macros/up.edu.ph/s/AKfycbxwUQ0P6L5aW8T1anA-4d6bL5kDOInFh3Bdi0YcS5mNAj6wIDCFXJSXlAy0q-mj5wB5/exec" target="_blank">→ Buksan ang PPMP Form</a>`,chips:['CHK RAP','COS Wellness Leave','Back to Menu']},
+   cos:{triggers:['cos wellness','wellness leave','cos','leave form','cos leave'],response:`🌿 <b>C.O.S. Wellness Leave</b><br><br>Para sa mga C.O.S. staff na nangangailangan ng wellness leave. Mag-rest ka na, pre, deserve mo 'yan.<br><br><a href="https://script.google.com/macros/s/AKfycbzLeR_dq973LeW7W9mp7fKLRVLuKKZvAVjxtiaBUSYz4cjeicGTSyIN7_7jfg3s6iayAQ/exec" target="_blank">→ Buksan ang COS Wellness Leave Form</a>`,chips:['CHK RAP','PPMP','Back to Menu']},
+   aira:{triggers:['aira','a.i.r.a','admin inventory','ordering system','inventory request','order supplies','mag-order'],response:`📦 <b>A.I.R.A.</b> — Admin Inventory Request & Automation<br><br>Para mag-request ng supplies at materials. Dito na 'yan, tol.<br><br><a href="https://script.google.com/a/macros/up.edu.ph/s/AKfycbxBPAe_1hrBIPJvqXWNuOi9Rlbp5fxZ2u0SL1_OYv49DRZJUScKXztV10ex6ADLgcT-Yw/exec?page=ordering" target="_blank">→ Buksan ang A.I.R.A. System</a>`,chips:['AV Inventory','Dashboards','Back to Menu']},
+   avinventory:{triggers:['av inventory','audio visual','audio visual inventory','av equipment','projector','microphone','speaker inventory'],response:`🎥 <b>Audio Visual Inventory</b><br><br>Listahan ng lahat ng AV equipment ng CHK. Bago ka mag-borrow, tingnan mo muna kung available, pre.<br><br><a href="https://chkadministrativeportal.github.io/CHK-Admin-AV-Inventory/" target="_blank">→ Buksan ang AV Inventory</a>`,chips:['A.I.R.A.','Back to Menu']},
+   dashboards:{triggers:['dashboard','dashboards','reports','data','statistics','analytics'],response:`📊 <b>Dashboards</b> — anong data ang kailangan mo, pre?`,chips:['Area Dashboard','Trip Dashboard','Stock Dashboard']},
+   area:{triggers:['area dashboard','staff dashboard','area report','staff report'],response:`🗺 <b>Area Dashboard</b><br><br>Para ma-monitor ang iba't ibang area at staff activities ng CHK.<br><br><a href="https://script.google.com/a/macros/up.edu.ph/s/AKfycbwGYdpEVXRXmULvMIh__ZjorD3xF4lxzMAllRDyQ4ymRXmcqN60IKHME4LPaoT2WO3S/exec?page=staff" target="_blank">→ Buksan ang Area Dashboard</a>`,chips:['Trip Dashboard','Stock Dashboard','Dashboards']},
+   trip:{triggers:['trip dashboard','trip','transport log','vehicle log','biyahe','log ng sasakyan','records ng biyahe'],response:`🚌 <b>Trip Dashboard</b><br><br>Para ma-track ang lahat ng opisyal na biyahe at transport records.<br><br><a href="https://script.google.com/macros/s/AKfycbyRAYyzLvqB9jI_CtL7WK_RizABLwgp1see3L_WD2rpkJK2SDlOnFZTXpyyJ_k_GwytsA/exec?page=dashboard" target="_blank">→ Buksan ang Trip Dashboard</a>`,chips:['Area Dashboard','Stock Dashboard','Dashboards']},
+   stock:{triggers:['stock dashboard','stock','inventory','supply','supplies','stock ng gamit','inventory ng supplies'],response:`📦 <b>Stock Dashboard</b><br><br>Para ma-monitor ang inventory levels at supply requests.<br><br><a href="https://script.google.com/a/macros/up.edu.ph/s/AKfycbxBPAe_1hrBIPJvqXWNuOi9Rlbp5fxZ2u0SL1_OYv49DRZJUScKXztV10ex6ADLgcT-Yw/exec?page=dashboard" target="_blank">→ Buksan ang Stock Dashboard</a>`,chips:['Area Dashboard','Trip Dashboard','Dashboards']},
+   calendars:{triggers:['calendar','calendars','schedule','schedules','sports','venue calendar','venue calendars','kalendaryo','iskedyul','available na araw','kailan available'],response:`📅 <b>Venue Calendars</b> — piliin ang venue, pre:<br><div class="chk-venue-dropdown"><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=593929024&single=true" target="_blank"><span class="chk-vicon">⚾</span>Baseball Field</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=567935148&single=true" target="_blank"><span class="chk-vicon">🌳</span>Baseball Garden</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=87197056&single=true" target="_blank"><span class="chk-vicon">🏟</span>Dugout 1</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=306081692&single=true" target="_blank"><span class="chk-vicon">🏟</span>Dugout 2</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1055806031&single=true" target="_blank"><span class="chk-vicon">🏈</span>Football Field</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=426248820&single=true" target="_blank"><span class="chk-vicon">🏃</span>Track Oval</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1640909333&single=true" target="_blank"><span class="chk-vicon">🎾</span>Tennis Court</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1634822982&single=true" target="_blank"><span class="chk-vicon">🎾</span>Tennis Court Room 1</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=475532241&single=true" target="_blank"><span class="chk-vicon">🎾</span>Tennis Court Room 2</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=735489721&single=true" target="_blank"><span class="chk-vicon">🏐</span>VTC Court</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1253621251&single=true" target="_blank"><span class="chk-vicon">🏐</span>VTC Meeting Room 1</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1309697888&single=true" target="_blank"><span class="chk-vicon">🏐</span>VTC Meeting Room 2</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1673482118&single=true" target="_blank"><span class="chk-vicon">🏋</span>VTC Weights Room</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=356190388&single=true" target="_blank"><span class="chk-vicon">🏟</span>Ylanan Court 1</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=630773403&single=true" target="_blank"><span class="chk-vicon">🏟</span>Ylanan Court 2</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=228253580&single=true" target="_blank"><span class="chk-vicon">🏟</span>Ylanan Court 3</a><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1911761496&single=true" target="_blank"><span class="chk-vicon">🏋</span>Small Gym Court 4</a></div>`,chips:['Venue Reservation','Back to Menu']},
+   baseball:{triggers:['baseball field','baseball garden','dugout','baseball'],response:`⚾ <b>Baseball Venues</b><br><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=593929024&single=true" target="_blank">⚾ Baseball Field</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=567935148&single=true" target="_blank">🌳 Baseball Garden</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=87197056&single=true" target="_blank">🏟 Dugout 1</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=306081692&single=true" target="_blank">🏟 Dugout 2</a>`,chips:['Football Field','Tennis','All Calendars']},
+   football:{triggers:['football field','football'],response:`🏈 <b>Football Field Calendar</b><br><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1055806031&single=true" target="_blank">→ Buksan ang Football Field Calendar</a>`,chips:['Baseball Field','Track Oval','All Calendars']},
+   track:{triggers:['track oval','track and field','track & field','track'],response:`🏃 <b>Track Oval Calendar</b><br><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=426248820&single=true" target="_blank">→ Buksan ang Track Oval Calendar</a>`,chips:['Tennis','VTC','All Calendars']},
+   tennis:{triggers:['tennis court','tennis room','tennis'],response:`🎾 <b>Tennis Venues</b><br><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1640909333&single=true" target="_blank">🎾 Tennis Court</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1634822982&single=true" target="_blank">🎾 Tennis Court Room 1</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=475532241&single=true" target="_blank">🎾 Tennis Court Room 2</a>`,chips:['VTC','Ylanan','All Calendars']},
+   vtc:{triggers:['vtc court','vtc meeting','vtc weights','vtc','volleyball'],response:`🏐 <b>VTC Venues</b><br><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=735489721&single=true" target="_blank">🏐 VTC Court</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1253621251&single=true" target="_blank">🏐 VTC Meeting Room 1</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1309697888&single=true" target="_blank">🏐 VTC Meeting Room 2</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1673482118&single=true" target="_blank">🏋 VTC Weights Room</a>`,chips:['Ylanan','Small Gym Court 4','All Calendars']},
+   ylanan:{triggers:['ylanan court','ylanan gym','ylanan'],response:`🏟 <b>Ylanan Courts</b><br><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=356190388&single=true" target="_blank">🏟 Ylanan Court 1</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=630773403&single=true" target="_blank">🏟 Ylanan Court 2</a><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=228253580&single=true" target="_blank">🏟 Ylanan Court 3</a>`,chips:['VTC','Small Gym Court 4','All Calendars']},
+   smallgym:{triggers:['small gym','small gym court 4','fitness gym','weights room','gym court'],response:`🏋 <b>Small Gym Court 4</b><br><br><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSXeutTA06JvvIqDmAr7g14ZaOYrxOUeNRbNMrVD_1ETNo_oA8dQmmUheN_KwPQ6IomCjZgr7q5fO6K/pubhtml?gid=1911761496&single=true" target="_blank">→ Buksan ang Small Gym Court 4 Calendar</a>`,chips:['Ylanan','VTC','All Calendars']},
+   kumusta:{triggers:['kumusta','musta','kamusta','kamustahan','how are you','how r you','how are u','hru','how\'s it going','howdy','hi how','hello how'],response:`Okay naman po! Natutuwa ako, may nagtanong din kung kamusta ako, hindi request agad. 😅. 😂<br><i style="opacity:.7;font-size:12px">Joke. Mabuti naman, ready pa rin sa serbisyo. Ikaw, kumain ka na?</i><br><br>Ano ang kailangan mo, pre?`,chips:['Help please','Reservations','Dashboards']},
+   sinoka:{triggers:['sino ka','sino ka ba','who are you','anong pangalan mo','what is your name'],response:`Ako si <b>CHiKito</b>! 🤖 Ang admin assistant ng CHK Admin Portal, UP Diliman.<br><i style="opacity:.7;font-size:12px">Chill pero may alam. Hindi ako nagbibiro pagdating sa trabaho. (Minsan.)</i><br><br>Saan tayo magsisimula, pre?`,chips:['Admin Forms','Dashboards','A.I.R.A.']},
+   salamat:{triggers:['salamat','maraming salamat','thank you','thanks','ty ','tnx '],response:`Sus, wala 'yun. Trabaho ko 'yan, pre. 😏<br><i style="opacity:.7;font-size:12px">Hindi ka dapat magpasalamat sa taong ginagawa lang ang trabaho niya. Pero oo, welcome.</i>`,chips:['Back to Menu','Reservations','Dashboards']},
+   kain:{triggers:['kain na','kain tayo','lunch','lunch time','lunch na','merienda','gutom'],response:`Uwi ka na para kumain! Bakit ka pa nandito? 🍱<br><i style="opacity:.7;font-size:12px">Ako? Kuryente at data lang ang kinakain ko. Walang break.</i><br><br>Pero pag-uwi mo, tanong ka ulit kung may kailangan ka.`,chips:['Meal Request','Back to Menu']},
+   joke:{triggers:['joke','patawa','patatawa','tumawa','anu joke','magbiro'],response:`Bakit laging pagod ang admin staff?<br><br>Kasi paulit-ulit ang tanong pero iisa lang ang sagot. 😂<br><i style="opacity:.7;font-size:12px">Tumatawa ka ba? Sana. Okay, back to business na tayo.</i>`,chips:['Reservations','Admin Forms','Back to Menu']},
+   sirjames:{triggers:['sir james','james'],response:`Ay— si Sir James? ...<br><br>Tama siya. Hindi ako nakikipagtalo doon. <b>Siya ang Head Admin Officer.</b><br><i style="opacity:.7;font-size:12px">Lahat ng major na bagay, pumunta sa kanya. Wag ko na pag-usapan.</i> Next question.`,chips:['Back to Menu']},
+   jhayr:{triggers:['kuya jhayr','jhayr','liaison officer'],response:`Haha si <b>Kuya Jhayr</b>! Ang aming Liaison Officer. 🏆<br><br>Laging nasa tamang lugar sa tamang oras 'yan. Legend sa field, pre.<br><i style="opacity:.7;font-size:12px">Kuya Jhayr nalang pre, mas alam niya 'yan in person kaysa sa akin.</i>`,chips:['Back to Menu']},
+   deanmallari:{triggers:['dean mallari','dean','mallari'],response:`<i>*tumitino*</i><br><br><b>Si Dean Mallari po ang pinuno ng kolehiyo.</b> Lahat ng desisyon ay dumadaan sa kanya.<br><br>Wag mong basta-basta i-approach nang walang appointment, pre. Maayos ka muna bago pumunta.`,chips:['Back to Menu']},
+   sirtaps:{triggers:['sir taps','taps','supply officer'],response:`Ah... si <b>Sir Taps</b>.<br><br>Siya ang may hawak ng supplies. Basta — siya ang tama. Lagi.<br><i style="opacity:.7;font-size:12px">Huwag mong sabihin na ako nagsabi ha. Sige na, next.</i>`,chips:['Stock Dashboard','A.I.R.A.','Back to Menu']},
+   codeofethics:{triggers:['code of ethics ng up faculty','code of ethics up faculty','up faculty code of ethics','code of ethics faculty','faculty code of ethics','code of ethics','ethics ng faculty','faculty ethics','etika ng faculty','ang code of ethics','code ng etika','ethical code','faculty manual ethics','10 punto ng ethics','sampung punto','pangako ng faculty'],response:`📜 <b>Code of Ethics ng UP Faculty</b><br><br>Ang UP Faculty Code of Ethics ay isang <b>sampung-puntong pangako</b> na kinabibilangan ng:<br><br>1️⃣ Pagtataguyod ng karangalan ng UP<br>2️⃣ Pag-pursue ng excellence sa pagtuturo, pananaliksik, at extension<br>3️⃣ Pagtataguyod ng nasyonalismo at social justice<br>4️⃣ Pag-iingat ng academic freedom<br>5️⃣ Pagpapunla ng pagmamahal sa kaalaman sa mga estudyante<br>6️⃣ Pakikiugnayan sa mga kasamahan nang may kooperasyon at propesyonalismo<br>7️⃣ Pagsunod sa mga batas at University Code<br>8️⃣ Pagtangkilik sa kalikasan at kapaligiran<br>9️⃣ Pagpapairal ng mataas na pamantayan ng asal at integridad<br>🔟 Paglilingkod sa bansa at lipunan<br><br><i style="opacity:.7;font-size:12px">Reference: UP Faculty Manual, Code of Ethics section. Para sa kumpletong teksto, makipag-ugnayan sa CHK Admin Office o tingnan ang opisyal na UP Faculty Manual.</i>`,chips:['Back to Menu','Admin Forms','Help please']},
+   bye:{triggers:['bye','paalam','aalis na','alis na ko','alis na ako','goodbye','good bye','sige na','ingat'],response:`Sige, pre. Ingat sa byahe. 👋<br><i style="opacity:.7;font-size:12px">Dito lang ako. Wala naman akong ibang pupuntahan.</i>`,chips:['Back to Menu']},
+   help:{triggers:['help','what can you do','options','menu','start','features','tulong','patulong','ano ang kaya mo','guide','gabay'],response:`Eto ang kaya kong gawin, tol:<br><br>📋 <b>Reservations</b> – Venue, Vehicle<br>🛠 <b>Admin Forms</b> – Work Order, Fund Request, Meal, CHK RAP, PPMP, COS Leave<br>📦 <b>A.I.R.A.</b> – Inventory Request<br>🎥 <b>AV Inventory</b><br>📊 <b>Dashboards</b> – Area, Trip, Stock<br>📅 <b>Venue Calendars</b> – 17 venues<br><br><i style="opacity:.7;font-size:12px">Taglish or English, gets ko pareho. 🇵🇭</i>`,chips:['Reservations','Admin Forms','Dashboards','Venue Calendars']}
+  };
+
+  const CHIP_MAP={
+    'Reservations':'reservations','Admin Forms':'admin','Dashboards':'dashboards',
+    'Venue Calendars':'calendars','Back to Menu':'help','All Calendars':'calendars',
+    'Venue Reservation':'venue','Vehicle Reservation':'vehicle','Work Order':'workorder',
+    'Fund Request':'fundrequest','Meal Request':'mealrequest','CHK RAP':'rap',
+    'PPMP':'ppmp','COS Wellness Leave':'cos','A.I.R.A.':'aira',
+    'Audio Visual Inventory':'avinventory','AV Inventory':'avinventory',
+    'Area Dashboard':'area','Trip Dashboard':'trip','Stock Dashboard':'stock',
+    'Baseball Field':'baseball','Football Field':'football','Track Oval':'track',
+    'Tennis':'tennis','VTC':'vtc','Ylanan':'ylanan','Small Gym Court 4':'smallgym',
+    'Help please':'help','Mabuti naman':'salamat',
+    'Code of Ethics':'codeofethics','Faculty Code of Ethics':'codeofethics'
+  };
+
+
+  // ══════════════════════════════════════
+  // EMBEDDED KNOWLEDGE BASE (from spreadsheet)
+  // 130 Q&A entries embedded directly — no network needed
+  // ══════════════════════════════════════
+  const KB_QA = [{"ID": 1, "Question": "Paano mag-reserve ng venue sa CHK?", "Answer": "Mag-fill out ng Venue Reservation Form sa CHK Admin Office o i-access ang AREA portal sa https://sites.google.com/up.edu.ph/chk360/reserve-a-venue. Kailangan ng advance notice — minimum 5 working days bago ang event. I-confirm sa CHK Admin Office ang availability.", "Category": "Venue", "Active": true}, {"ID": 2, "Question": "Saan makikita ang venue schedule ng CHK?", "Answer": "Makikita ang pinakabagong venue schedules dito: https://chkadministrativeportal.github.io/venuecalendars/ — Pumili ng venue para makita ang calendar.", "Category": "Venue", "Active": true}, {"ID": 3, "Question": "Magkano ang bayad sa venue reservation?", "Answer": "Depende sa venue at sa oras ng gamit. May OT fee para sa after-hours na reservations. Para sa exact rates, makipag-ugnayan sa CHK Admin Office.", "Category": "Venue", "Active": true}, {"ID": 4, "Question": "Puwede bang mag-reserve ng venue para sa external na grupo?", "Answer": "Oo, puwede — pero kailangan ng endorsement/approval mula sa CHK AO at DEAN. May kaukulang fees at requirements. Makipag-coordinate sa CHK Admin Office.", "Category": "Venue", "Active": true}, {"ID": 5, "Question": "Anong mga venue ang available sa CHK?", "Answer": "Ang CHK ay may 17 venues: Baseball Field, Baseball Garden, Dugout 1 & 2, Football Field, Small Gym/Court 4, Tennis Court, Track Oval, VTC Court, VTC Meeting Rooms 1 & 2, Ylanan Courts 1-3, VTC Weights Room, at Tennis Court Rooms 1 & 2. Pero para makita ang available time, tignan ang kanilang Venue Calendars", "Category": "Venue", "Active": true}, {"ID": 6, "Question": "Paano mag-request ng sasakyan sa CHK?", "Answer": "I-fill out ang Vehicle/Trip Request Form sa CHK Admin Office o sa TRIP portal. Kailangan ng advance request — minimum 3 working days. Ang approval ay nakasalalay sa availability ng driver at sasakyan. Bisitahin ang link na ito: https://sites.google.com/up.edu.ph/chk360/reserve-a-vehicle", "Category": "Vehicle", "Active": true}, {"ID": 7, "Question": "Available ba ang CHK vehicle para sa out-of-campus na lakad?", "Answer": "Oo, puwede — subject to availability at approval. Kailangan i-coordinate sa CHK Admin Office at i-coconfirm naman nila sa OASD (Office of Athletics and Sports Development) para sa mga varsity trips.", "Category": "Vehicle", "Active": true}, {"ID": 8, "Question": "Paano mag-request ng supplies sa CHK?", "Answer": "Gamitin ang AIRA portal (Automated Inventory and Requisition Application) para mag-file ng supply request. I-access sa https://sites.google.com/up.edu.ph/chk360/a-i-r-a. Ang mga request ay subject to stock availability. Paalala, ang pag request kay AIRA ay para lamang sa mga staff at faculty ng CHK. ", "Category": "Supply", "Active": true}, {"ID": 9, "Question": "Saan makikita ang stock ng supplies sa CHK?", "Answer": "Makikita ang real-time stock levels sa AIRA system. Ang mga item na lalabas kay AIRA ay ang tanging mga available items sa CHK Admin Office.", "Category": "Supply", "Active": true}, {"ID": 10, "Question": "Paano mag-report ng sirang facilities sa CHK?", "Answer": "Gamitin ang CHK RAP (Report-A-Problem) system o mag-file ng Work Order sa CHK Admin Office. I-access sa https://sites.google.com/up.edu.ph/chk360/forms. Ilagay ang detalye ng problema at lokasyon.", "Category": "Maintenance", "Active": true}, {"ID": 11, "Question": "Gaano katagal bago ma-repair ang reported na problema?", "Answer": "Depende sa urgency at likas ng problema. Ang urgent repairs (safety hazards) ay pinriprioridad. Para sa update sa status ng iyong work order, makipag-ugnayan sa CHK Admin Office.", "Category": "Maintenance", "Active": true}, {"ID": 12, "Question": "Paano mag-file ng leave para sa COS staff?", "Answer": "Ang COS staff ay gumagamit ng COS Leave System para sa wellness leave. I-access sa CHK portal: https://sites.google.com/up.edu.ph/chk360/forms. Kailangan ng advance notice at approval ng supervisor. Para sa detalye, makipag-ugnayan sa CHK Admin Office.", "Category": "Leave", "Active": true}, {"ID": 13, "Question": "Ilang araw na wellness leave ang maaaring i-file ng COS staff?", "Answer": "Ang wellness leave para sa COS staff ay base sa kontrata at CHK policy. Para sa exact na bilang ng leave credits, makipag-ugnayan sa CHK Admin Office.", "Category": "Leave", "Active": true}, {"ID": 14, "Question": "Saan makikita ang CHK Admin Office?", "Answer": "Ang CHK Administrative Office ay nasa Varsity Training Center, Magsaysay Avenue, University of the Philippines Diliman, Quezon City. Bukas Lunes hanggang Biyernes, 8:00 AM - 5:00 PM.", "Category": "General", "Active": true}, {"ID": 15, "Question": "Ano ang portal ng CHK Admin Office?", "Answer": "Ang opisyal na portal ng CHK Admin Office ay: https://sites.google.com/up.edu.ph/chk360 — Dito makikita ang lahat ng systems at forms.", "Category": "General", "Active": true}, {"ID": 16, "Question": "Sino ang Head Administrative Officer ng CHK?", "Answer": "Ang Head Administrative Officer ng CHK ay si James Lester P. Edrozo (Administrative Officer V). Para sa mga katanungan, makipag-ugnayan sa CHK Admin Office.", "Category": "General", "Active": true}, {"ID": 17, "Question": "Sino-sino ang mga staff sa Administrative Office ng CHK?", "Answer": "Sa ngayon dalawa lamang silang office staff, si James Lester P. Edrozo (Administrative Officer V) at si Leoncio \"Jhayr\" S. Cadag Jr. (Liaision Officer). ", "Category": "General", "Active": true}, {"ID": 18, "Question": "Ano ang ONBOARD system ng CHK?", "Answer": "Ang CHK ONBOARD ay ang digital onboarding system para sa mga bagong CHK staff at faculty. Naglalaman ito ng mga modules, quizzes, at impormasyon tungkol sa CHK policies at procedures.", "Category": "Onboarding", "Active": true}, {"ID": 19, "Question": "Ano ang PBMS ng CHK?", "Answer": "Ang PBMS (Performance-Based Monitoring System) ay ginagamit para sa pagsubaybay ng performance indicators ng CHK. Kasama dito ang quarterly targets at accomplishments. Kung ikaw ay faculty at staff ng CHK at nais malaman pa ang tungkol dito, makipag ugnayan sa Admin Office.", "Category": "PBMS", "Active": true}, {"ID": 20, "Question": "Ano ang UPD Faculty Manual?", "Answer": "Ito ang opisyal na gabay ng UP Diliman para sa lahat ng miyembro ng faculty. Naglalaman ito ng mga patakaran, regulasyon, at proseduro na batay sa University Code, mga resolusyon ng Board of Regents, at iba pang opisyal na dokumento. Inilathala ito noong 2003 bilang revised version ng 1989 Faculty Manual.", "Category": "General", "Active": true}, {"ID": 21, "Question": "Ano ang misyon ng University of the Philippines?", "Answer": "Ang UP ay nagbibigay ng advanced instruction sa literatura, pilosopiya, agham, at sining; nagbibigay ng propesyonal at teknikal na pagsasanay; at hinihikayat at isinasagawa ang pananaliksik at kontribusyon sa pagpapalaki at pagpapakalat ng kaalaman. Ito rin ay nagsisilbing instrumento ng pambansang pag-unlad.", "Category": "General", "Active": true}, {"ID": 22, "Question": "Sino ang bumubuo sa Board of Regents ng UP?", "Answer": "Ang BOR ay binubuo ng: Chair ng CHED (ex officio Chair), Presidente ng UP (ex officio Vice-Chair), Chair ng Senate Committee on Education, Chair ng House Committee on Education, Presidente ng UPAA, Faculty Regent (1-year term), Student Regent (1-year term), at limang (5) miyembro na hinirang ng Presidente ng Pilipinas (tatlo ay kailangang alumni ng UP, 2-year term).", "Category": "General", "Active": true}, {"ID": 23, "Question": "Ano ang University Council (UC) at sino ang mga miyembro nito?", "Answer": "Ang UC ay binubuo ng Chancellor, lahat ng Professors, Associate Professors, at Assistant Professors ng autonomous campus. Ang Chancellor ang nagsisilbing Chair at ang University Registrar ang Secretary. Ang Presidente ng UP ay ex officio na miyembro rin at nagpupuno kapag naroon. Ang quorum ay 75 miyembro.", "Category": "General", "Active": true}, {"ID": 24, "Question": "Ano ang mga kapangyarihan ng University Council?", "Answer": "Ang UC, subject sa approval ng BOR, ay maaaring: mag-prescribe ng courses of study at rules of discipline; mag-fix ng requirements para sa admission at graduation; magrerekomenda ng mga tatanggap ng degrees; at mag-exercise ng disciplinary powers sa mga estudyante.", "Category": "General", "Active": true}, {"ID": 25, "Question": "Ano ang mga regular na miyembro ng teaching staff?", "Answer": "Ang mga regular na miyembro ay: Professors, Associate Professors, Assistant Professors, at Instructors. Kasama rin ang Research/Extension Faculty na may appointment sa katumbas na rank.", "Category": "General", "Active": true}, {"ID": 26, "Question": "Ano ang mga non-regular na miyembro ng teaching staff?", "Answer": "Ang mga non-regular ay: Lecturer, Senior Lecturer, Professorial Lecturer, Visiting Professor, Exchange Professor, Adjunct Professor, Affiliate Faculty, at Teaching Associate/Fellow.", "Category": "General", "Active": true}, {"ID": 27, "Question": "Ano ang kaibahan ng Lecturer, Senior Lecturer, at Professorial Lecturer?", "Answer": "Ang Lecturer ay non-regular faculty na temporary status at binabayaran hourly. Ang Professorial Lecturer ay katumbas ng Associate Professor o full Professor. Ang maximum teaching load ng isang Lecturer ay 6 units per semester sa lahat ng units ng UP, o maximum na 18 units sa isang taon.", "Category": "General", "Active": true}, {"ID": 28, "Question": "Ano ang Visiting Professor at ano ang kanyang entitlement?", "Answer": "Ang Visiting Professor ay faculty ng ibang institusyon na magtuturo sa UP. Ang terms of employment ay depende sa MOA o invitation. Para sa bisita na may MOA, maaaring makatanggap ng libreng housing o equivalent na sahod. Para sa mga walang MOA, merong iba't ibang allowance depende sa tagal ng bisita (10 araw o mas kaunti, o higit pa).", "Category": "General", "Active": true}, {"ID": 29, "Question": "Ano ang Adjunct Professor?", "Answer": "Ang Adjunct Professor ay isang kilalang eksperto mula sa ibang institusyon na handang magturo at/o mag-research sa UP nang walang bayad mula sa UP. Ang kumpanya o institusyon ng Adjunct Professor ang nagbibigay ng kompensasyon at dapat i-assign siya ng hindi bababa sa isang araw bawat linggo sa kolehiyo.", "Category": "General", "Active": true}, {"ID": 30, "Question": "Ano ang Teaching Associate/Fellow?", "Answer": "Ito ay isang master's o doctoral student na itinalaga sa pagtuturo ng undergraduate courses sa departamento kung saan siya naka-enrol. Obligado siyang turuan ang 6-9 units per semester at magdala ng 6-9 units na graduate coursework o 12 units na thesis/dissertation.", "Category": "General", "Active": true}, {"ID": 31, "Question": "Ano ang mga benepisyo ng Teaching Associate/Fellow?", "Answer": "Tumatanggap sila ng: sahod ayon sa BOR-approved rates, book allowance, waiver ng tuition at miscellaneous fees (maliban sa student fees), at thesis/dissertation grant. Maaari ring makatanggap ng standard summer honoraria.", "Category": "General", "Active": true}, {"ID": 32, "Question": "Sino ang Research/Extension Faculty at ano ang kanilang pangunahing tungkulin?", "Answer": "Sila ay mga qualified researchers o extension specialists na binibigyan ng teaching assignments. Ang kanilang pangunahing tungkulin ay mag-research/extension, ngunit kailangan nilang magturo ng hindi bababa sa isang (1) kurso bawat taon sa kanilang disiplina.", "Category": "General", "Active": true}, {"ID": 33, "Question": "Ilan ang required na teaching load ng isang full-time faculty member?", "Answer": "Ang normal na teaching load ay 12 units per semester. Hindi maaaring magturo ang isang faculty ng wala sa 6 units per semester. Maaaring bawasan ng Presidente o Chancellor ang load hanggang hindi bababa sa 3 units kung aktibo ang faculty sa research, creative work, community service, o iba pang authorized activities.", "Category": "General", "Active": true}, {"ID": 34, "Question": "Paano kinakalkula ang teaching load para sa malalaking klase?", "Answer": "Para sa klase na may higit sa 40 estudyante (N), ginagamit ang formula: Teaching Unit (TU) = Course Credit × (1 + (N-40)/120). Ang maximum large class multiplier ay 2.00 kapag umabot ang klase sa 160 estudyante. Ang multiplier ay ginagamit para sa overload o summer honoraria, hindi para mabawasan ang required teaching load.", "Category": "General", "Active": true}, {"ID": 35, "Question": "Paano binibigyan ng credit ang General Education (GE) classes?", "Answer": "Ang GE classes na may hindi bababa sa 25 estudyante ay bibigyan ng credit load multiplier na 1.33. Ibig sabihin, ang teaching unit ay 1.33 beses ng course credit. Ngunit HINDI ito gagamitin para matugunan ang required 12-unit teaching load; para lamang ito sa pagkalkula ng overload o summer honoraria.", "Category": "General", "Active": true}, {"ID": 36, "Question": "Paano binibigyan ng credit ang Physical Education (PE) courses sa CHK?", "Answer": "Para sa practical (activity) PE courses: 1½ oras bawat linggo o 24 oras bawat semester ng 16 linggo ay katumbas ng 1 unit. Para sa theoretical PE courses: 1 oras bawat linggo o 16 oras bawat semester ay katumbas ng 1 unit. Ang normal na teaching load sa CHK ay 12 units, katulad ng ibang units ng University.", "Category": "General", "Active": true}, {"ID": 37, "Question": "Ano ang mga non-teaching activities na maaaring mag-satisfy sa 12-unit teaching load?", "Answer": "Ang mga sumusunod ay maaaring mag-satisfy ng hanggang 6 units ng teaching load (maliban kung authorized ng Presidente o Chancellor): authorized graduate studies (Study Load Credit), research/creative work (Research Load Credit o RLC/CWLC), extension, at administrative work (Administrative Load Credit o ALC).", "Category": "General", "Active": true}, {"ID": 38, "Question": "Ano ang Study Load Credit (SLC) at paano ito ginagawa?", "Answer": "Ang SLC ay ibinibigay sa mga faculty na naka-enrol habang nagtatrabaho, para magkaroon sila ng mas maraming oras para mag-aral. Ang teaching load ay bawasan ng katumbas na bilang ng enrolled units, ngunit hindi lalampas ng 6 units. Hindi ito gagamitin para mag-claim ng overload honorarium.", "Category": "General", "Active": true}, {"ID": 39, "Question": "Ano ang Research Load Credit (RLC) o Creative Work Load Credit (CWLC)?", "Answer": "Ito ay ibinibigay sa mga faculty na gumagawa ng research o creative work, at maaari itong mag-partially satisfy sa 12-unit load. Ang karaniwang RLC/CWLC ay 1-3 units bawat semester. Maaaring mag-apply ng hanggang 6 units sa napaka-meritorious na kaso sa pamamagitan ng Chancellor.", "Category": "General", "Active": true}, {"ID": 40, "Question": "Gaano katagal dapat isumite ang ulat para sa RLC/CWLC?", "Answer": "Kailangan ng progress report o accomplishment report sa OVCRD sa katapusan ng semester na kinuha ang load credit at sa muling pag-apply. Kailangang may attached na evaluation ng College Research Committee. Ang final report ay isusumite sa katapusan ng project period.", "Category": "General", "Active": true}, {"ID": 41, "Question": "Ano ang Administrative Load Credit (ALC) at paano ito naaayon sa mga posisyon?", "Answer": "Ang ALC ay ibinibigay sa mga faculty na may administrative assignment. Ang mga fixed ALCs ay: 12 units para sa mga Presidente, VPs, Chancellors, Vice Chancellors; 9 units para sa Deans, Faculty Regent, System Directors, University Registrars; at 6 units para sa Assistant Directors, CU Directors, High School Principals. Para sa variable positions tulad ng College Secretaries, Dept Chairs: 3-6 units. Para sa coordinators, assistant chairs: 1-3 units.", "Category": "General", "Active": true}, {"ID": 42, "Question": "Ano ang mga limitasyon sa overload?", "Answer": "Para sa faculty na may teaching duties lamang: hindi maaaring bayaran ng overload honoraria para sa higit sa 9 units course credit per semester. Para sa summer: hindi higit sa 2 courses o 6 units course credit. Para sa faculty administrators: limitado sa 6 course credit per semester o 12 per year ang teaching load para sa overload; at hindi bababa sa 3 course credit ang kailangang ituro pagkatapos ng office hours.", "Category": "General", "Active": true}, {"ID": 43, "Question": "Ano ang patakaran sa attendance ng faculty sa klase?", "Answer": "Inaasahang matutugunan ng faculty ang kanilang mga klase ayon sa schedule. Ang vacation leaves ay maaari lamang kunin sa regular na vacation periods ng University. Maaaring mag-special detail o umattend ng conferences ngunit hindi dapat lumampas sa 20% ng oras para sa bawat kurso. Dapat gumawa ng make-up classes ang faculty na may absences.", "Category": "General", "Active": true}, {"ID": 44, "Question": "Gaano karaming consultation hours ang kailangan ng faculty?", "Answer": "Dapat mag-available ang bawat faculty ng hindi bababa sa 10 oras bawat linggo sa regular na office hours para sa konsultasyon. Ang Dean o Director, kasama ang faculty member, ang magtatakda ng oras sa simula ng bawat semester.", "Category": "General", "Active": true}, {"ID": 45, "Question": "Kailan dapat isumite ang mga grades?", "Answer": "Ang grades ay dapat isumite ng faculty sa lalong madaling panahon pagkatapos ng final examination. Ang karaniwang allowable na panahon ay 5 araw para sa bawat seksyon. Ang lahat ng grades ay dapat isumite nang hindi lalampas sa 7 araw pagkatapos ng huling araw ng examination period.", "Category": "General", "Active": true}, {"ID": 46, "Question": "Gaano katagal dapat panatilihin ng faculty ang class records?", "Answer": "Kailangan ng faculty na panatilihin ang class records (grade sheets at record books) sa loob ng 5 taon pagkatapos ituro ang kurso. Sa kaso ng leave of absence, sabbatical, o paghiwalay sa University, kailangang isurrender ang mga records sa Department Chair o Institute Director.", "Category": "General", "Active": true}, {"ID": 47, "Question": "Ano ang mga pangkalahatang patakaran sa appointment ng faculty?", "Answer": "Ang lahat ng appointment ay batay sa merito. Walang religious test. Ang mga faculty ay exempt sa civil service examination. Ang bawat rekomendasyon sa BOR ay kailangang may kumpletong statement ng qualifications, training, service record, at publications ng kandidato.", "Category": "General", "Active": true}, {"ID": 48, "Question": "Maaari bang mag-appoint ng faculty member na kamag-anak ng isang opisyal?", "Answer": "Pinipigilan ng UP ang nepotismo sa mga appointment ng academic at administrative staff, maliban kung ang interes ng University ay nangangailangan nito at nadesisyunan ng BOR. Ito ay nangangailangan ng espesyal na pahintulot.", "Category": "General", "Active": true}, {"ID": 49, "Question": "Ano ang mga salary grades ng faculty ranks sa UP?", "Answer": "Ang mga salary grades ay: Instructor 1-7 (SG 14-17), Assistant Professor 1-7 (SG 18-21), Associate Professor 1-7 (SG 22-25), Professor 1-12 (SG 26-29).", "Category": "General", "Active": true}, {"ID": 50, "Question": "Ano ang papel ng Department Academic Personnel Committee (DAPC)?", "Answer": "Ang DAPC ay tumutulong sa pagsusuri ng mga rekomendasyon ng Department Chair tungkol sa recruitment, selection, performance evaluation, tenure, staff development, professorial chairs, at promotion ng academic personnel. Ang DAPC ay binubuo ng Department Chair at 2 o 4 elected faculty representatives.", "Category": "General", "Active": true}, {"ID": 51, "Question": "Ano ang papel ng College Academic Personnel Committee (CAPC)?", "Answer": "Ang CAPC ay binubuo ng Dean bilang Chair at ng mga Chairs ng iba't ibang DAPCs ng kolehiyo. Nirerebyu nito ang mga rekomendasyon ng DAPC, nagtatatag ng departmental priorities sa allocation ng pondo para sa promotion, at kumikilos sa mga hindi pagkakaayon sa pagitan ng Chair at DAPC.", "Category": "General", "Active": true}, {"ID": 52, "Question": "Ano ang Diliman Academic Personnel and Fellowship Committee (APFC) at ano ang tungkulin nito?", "Answer": "Ang APFC ay nirerebyu, sinusuri, at inire-endorse sa Chancellor ang mga rekomendasyon mula sa academic units tungkol sa: appointment, tenure, at promotions ng faculty at REPS (SG 18 pataas); award ng local at foreign fellowships, study leaves, special details, professorial chairs, at faculty grants; at financial assistance para sa participation sa conferences.", "Category": "General", "Active": true}, {"ID": 53, "Question": "Ano ang mga qualifications para sa automatic promotion sa pagtanggap ng Ph.D.?", "Answer": "Ang isang faculty na nakakuha ng Ph.D. mula sa isang reputable institution ay awtomatikong mapi-promote. Ang isang Instructor 1-2 ay magiging Asst Prof 3; Instructor 3-4 ay Asst Prof 4; Instructor 5-7 ay Asst Prof 5; Asst Prof 1 ay Asst Prof 5; Asst Prof 2 ay Asst Prof 6; Asst Prof 3 pataas ay bibigyan ng rank promotion o salary step increase base sa merito, hindi mas mababa sa Asst Prof 6.", "Category": "General", "Active": true}, {"ID": 54, "Question": "Ano ang mga pamantayan para sa promotion ng faculty?", "Answer": "Ang mga salik ay: teaching ability, research competence at productivity, scholarly performance, dedication to service, positive evidence of educational interest at marked academic growth, moral integrity, at good personal character. Ang promotion ay batay sa accomplishment, hindi seniority o haba ng serbisyo.", "Category": "General", "Active": true}, {"ID": 55, "Question": "Ano ang patakaran sa tenure ng Instructors?", "Answer": "Ang initial appointment bilang Instructor ay temporary, hindi hihigit sa 1 taon. Maaaring i-renew tuwing isang taon ngunit hindi lalampas sa 5 taon mula sa unang appointment. Pagkatapos ng 5 taon, awtomatikong magtatapos ang appointment maliban kung ma-promote sa Assistant Professor. Para sa mga nasa thesis stage ng master's, maaaring i-extend ng hanggang 2 taon.", "Category": "General", "Active": true}, {"ID": 56, "Question": "Ano ang mga minimum qualifications para sa tenure ng Assistant Professor?", "Answer": "Ang mga minimum qualifications ay: (1) hindi bababa sa Master's degree o equivalent o professional degree; (2) satisfactory o mas mataas na teaching performance; at (3) sole o lead authorship ng isang refereed journal article (local o international) o academic publication ng recognized academic publisher; o sa visual arts, creative work na exhibited at juried.", "Category": "General", "Active": true}, {"ID": 57, "Question": "Ano ang patakaran sa tenure ng Associate Professor?", "Answer": "Ang initial appointment bilang Associate Professor ay temporary, hanggang 2 taon. Pagkatapos ng 2 taon, ang renewal ay kasama na ang tenure batay sa mga criteria para sa faculty promotion.", "Category": "General", "Active": true}, {"ID": 58, "Question": "Ano ang patakaran sa tenure ng Professor?", "Answer": "Ang initial appointment bilang Professor ay para sa 1 taon. Ang renewal pagkatapos nito ay kasama na ang tenure.", "Category": "General", "Active": true}, {"ID": 59, "Question": "Paano mag-resign ang isang faculty member?", "Answer": "Kailangang mag-notify ng hindi bababa sa 60 araw bago mag-effect ang resignation sa Chancellor sa pamamagitan ng Dean o Director. Hindi maaaring ma-accept ang resignation hanggang hindi na-secure ang successor o temporary substitute. Ang pagtanggap ng resignation ay hindi nagbabago ng financial at property obligations sa University.", "Category": "General", "Active": true}, {"ID": 60, "Question": "Kailan compulsory ang retirement sa UP?", "Answer": "Ang compulsory retirement age ay 65 taon. Ang BOR ay maaaring mag-extend ng tenure ng faculty hanggang 70 taon, pero hindi higit pa rito, kung kinakailangan ang kanilang serbisyo. Hindi maaaring ma-appoint ang mga faculty na higit sa 70 taon sa regular na posisyon, ngunit maaaring maging Professorial Lecturer (contractual/non-career service).", "Category": "General", "Active": true}, {"ID": 61, "Question": "Anong mga opsyon ang mayroon para sa optional retirement?", "Answer": "Sa ilalim ng R.A. 660: sa edad 63 (may hindi bababa sa 18 taon ng serbisyo, huling 3 ay tuloy-tuloy); sa edad 60 (24 taon ng serbisyo); sa edad 61 (22 taon); sa edad 62 (20 taon). Ang mas detalyadong schedule ay available para sa mga nasa edad 52-59. Ang huling 3 taon ay kailangan ring tuloy-tuloy.", "Category": "General", "Active": true}, {"ID": 62, "Question": "Ano ang study privileges ng full-time faculty members?", "Answer": "Ang mga full-time faculty (permanent o temporary) ay maaaring mag-enrol ng hindi hihigit sa 9 units sa undergraduate o 6 units sa graduate level bawat semester sa reduced rates. Lahat ng full-time personnel ay may 100% waiver ng tuition, laboratory, at miscellaneous fees (maliban sa Student Fund fees) para sa kurso na relevant sa kanilang field o career development.", "Category": "General", "Active": true}, {"ID": 63, "Question": "Ano ang Study Load Credit (SLC) at ano ang mga kondisyon nito?", "Answer": "Ang SLC ay partial de-loading mula sa regular 12-unit teaching load habang nag-aaral. Ang teaching load ay bawasan ng katumbas na bilang ng enrolled units, ngunit hindi hihigit sa 6 units. Para sa 3 units o mas kaunti: approval ng Dean, upon recommendation ng Department Chair. Para sa 4-6 units: kailangan ng approval ng Chancellor.", "Category": "General", "Active": true}, {"ID": 64, "Question": "Ano ang Study Leave with pay at ano ang mga qualifications?", "Answer": "Para sa study leave with pay, kailangan ng faculty na: may proven teaching ability at commitment; may maayos na academic record; isang regular faculty occupying own item (hindi substitute); may rank na hindi hihigit sa Assistant Professor; may hindi bababa sa 1 taon ng serbisyo; may tenure o isinasaalang-alang para sa tenure; at hindi hihigit sa 40 taong gulang (sa ilang kaso maaaring i-waive).", "Category": "General", "Active": true}, {"ID": 65, "Question": "Gaano katagal ang study leave with pay?", "Answer": "Para sa Master's degree: hanggang 2.5 taon (30 buwan). Para sa Doctoral degree: hanggang 4 taon (48 buwan) pagkatapos ng Master's; o hanggang 5 taon (60 buwan) para sa straight Ph.D. program. Sa napaka-exceptional na kaso, maaaring mag-authorize ang Chancellor ng extra semester (para Master's) o extra year (para Doctoral).", "Category": "General", "Active": true}, {"ID": 66, "Question": "Ano ang mga obligasyon ng isang faculty Fellow o nagstudy leave with pay?", "Answer": "Kailangan nilang: (1) mag-execute ng return service contract at surety agreement bago magsimula ang leave; (2) mag-return service ng 1 taon para sa bawat taon ng local fellowship, o 2 taon para sa bawat taon ng fellowship abroad; at (3) hindi makikibahagi sa anumang ibang trabaho o practice ng propesyon sa panahon ng award.", "Category": "General", "Active": true}, {"ID": 67, "Question": "Ano ang Teacher's Leaves at sino ang karapat-dapat?", "Answer": "Ang Teacher's Leave ay para sa full- at part-time regular faculty na hindi gumagawa ng administrative functions. Binubuo ito ng vacation leave (1 buwan bawat academic year, bilang karagdagan sa Christmas vacation) at sick leave (hindi hihigit sa 15 araw, hindi kasama ang Sabado, Linggo, at holidays, sa isang academic year).", "Category": "General", "Active": true}, {"ID": 68, "Question": "Ano ang cumulative leave at sino ang karapat-dapat?", "Answer": "Ang cumulative leave ay para sa faculty na: (a) regular na gumagawa ng administrative functions; (b) nasa assignments na nangangailangan ng pagtatrabaho nang higit sa normal na office hours; o (c) nasa research bilang program/project/study leader. Ang vacation leave ay 15 araw at sick leave ay 15 araw bawat calendar year, at maaaring i-accumulate ng hanggang 10 buwan.", "Category": "General", "Active": true}, {"ID": 69, "Question": "Ano ang Academic Leave para sa Faculty Administrators?", "Answer": "Ang mga faculty administrator na may 9-12 units ng administrative load ay may karapatang magpahinga ng 10 working days bawat taon para makapag-pursue ng kanilang intellectual interests. Ito ay hindi cumulative, hindi maaaring monetized, at bukod pa sa regular na 15 araw ng vacation leave.", "Category": "General", "Active": true}, {"ID": 70, "Question": "Ano ang Special Leave Privileges (SLP) at sino ang may karapatan?", "Answer": "Ang lahat ng University personnel kasama ang faculty na may administrative functions ay may karapatang sa 3 araw ng SLP. Ito ay non-cumulative at non-commutable. Ang mga faculty na walang administrative duties ay HINDI entitled sa SLP pero binibigyan ng Teacher's Leave. Kasama sa mga uri ng SLP ang: birthday leave, emergency leave, enrolment, graduation, ospital ng family member, kasal, wedding anniversary, relocation, libing/pagluluksa, government transactions, at domestic emergencies.", "Category": "General", "Active": true}, {"ID": 71, "Question": "Ano ang Maternity Leave sa UP?", "Answer": "Ang mga babaeng government employee na may hindi bababa sa 2 taon ng serbisyo ay entitled sa 60 calendar days na maternity leave na may full pay. Para sa 1 taon ngunit wala pang 2 taon: 60 araw na may half pay. Sa ilalim ng UP guidelines, ang faculty ay may karapatang sa 6 buwan: 2 buwan bago at 4 buwan pagkatapos ng panganganak (maliban kung ibibigay ang 60-day pay rule sa unang bahagi).", "Category": "General", "Active": true}, {"ID": 72, "Question": "Ano ang Paternity Leave?", "Answer": "Ang married male employee ay may karapatang sa 7 araw na paternity leave na may bayad para sa unang 4 na panganganak ng kanyang asawa. Ginagamit ito para makapagbigay ng suporta sa asawa sa panahon ng panganganak o miscarriage.", "Category": "General", "Active": true}, {"ID": 73, "Question": "Ano ang Military Service Leave?", "Answer": "Ang mga faculty na tinatawag para sa regular active duty training ayon sa National Defense Act ay binibigyan ng military service leave na may bayad. Kung nag-volunteer (hindi obligado), kailangan nilang mag-apply ng leave of absence at walang bayad mula sa University, ngunit ang absence ay hindi nagbabawas ng vacation leave privileges.", "Category": "General", "Active": true}, {"ID": 74, "Question": "Ano ang Leave Without Pay?", "Answer": "Ang Chancellor ay maaaring mag-grant ng leave of absence without pay ng hindi hihigit sa 1 taon sa isang pagkakataon, at hindi hihigit sa 2 magkakasunod na taon, basta nakaplano ito nang maaga at hindi nakakasagabal sa trabaho ng University. Ang hindi pag-report pabalik pagkatapos ng leave ay itinuturing na AWOL.", "Category": "General", "Active": true}, {"ID": 75, "Question": "Ano ang Sabbatical at ano ang mga kondisyon nito?", "Answer": "Ang sabbatical ay pribilehiyo na nagpapalaya sa faculty mula sa regular na tungkulin para sa pag-aaral, imbestigasyon, at pananaliksik. Maaaring i-grant ng hanggang 1 taon na may full salary sa mga sumusunod na kondisyon: (1) hindi bababa sa 6 magkakasunod na taon ng serbisyo, kasama ang hindi bababa sa 2 taon bilang Associate Professor; (2) hindi ibinibigay sa loob ng 2 taon bago mag-65 ang faculty; (3) kailangang mag-report pabalik sa serbisyo kaagad pagkatapos.", "Category": "General", "Active": true}, {"ID": 76, "Question": "Ano ang mga pribilehiyo ng retired faculty members?", "Answer": "Ang mga retired faculty ay makatatanggap ng: UP Retiree ID Card (valid for life); library privileges; mga publikasyon ng University; newsletters; imbitasyon sa major University programs; exemption sa tuition at miscellaneous fees bilang estudyante o auditor sa UP courses, seminars, workshops. Maaari rin silang i-detail sa pending academic projects o special activities ng kolehiyo.", "Category": "General", "Active": true}, {"ID": 77, "Question": "Ano ang mga PhilHealth benefits ng faculty?", "Answer": "Lahat ng government employees ay compulsorily covered ng PhilHealth (National Health Insurance Program). Upang maabot ang benepisyo, kailangan ng hindi bababa sa 3 monthly contributions sa nakaraang 6 buwan. Ang benefit package ay sumasaklaw sa room at board (45 araw per year para sa miyembro at isa pang 45 araw para sa mga dependents), gamot at medisina, X-ray, laboratory, professional fees, at operating room.", "Category": "General", "Active": true}, {"ID": 78, "Question": "Sino ang mga qualified dependents sa ilalim ng PhilHealth?", "Answer": "Ang mga qualified dependents ay: (1) legitimate spouse na hindi miyembro ng PhilHealth; (2) mga anak (legitimate, illegitimate, o adopted) na wala pang 21 taong gulang, hindi kasal, at walang trabaho (o higit sa 21 kung may sakit na congenital o acquired); at (3) mga magulang na 60 taong gulang pataas na hindi qualified bilang lifetime members at lubos na umaasa sa miyembro.", "Category": "General", "Active": true}, {"ID": 79, "Question": "Ano ang GSIS Compulsory Life Insurance at ano ang mga benepisyo nito?", "Answer": "Lahat ng GSIS members ay may compulsory life insurance. Ang mga benepisyo ay: (1) Maturity benefit - ang face amount less indebtedness kapag nag-mature ang insurance; (2) Death benefit - ang face amount less indebtedness kapag namatay ang miyembro bago mag-mature; (3) Accidental Death Benefit - karagdagang halaga na katumbas ng face amount ng insurance kung accidental ang kamatayan.", "Category": "General", "Active": true}, {"ID": 80, "Question": "Ano ang mga retirement options sa GSIS?", "Answer": "Sa ilalim ng R.A. 8291, ang isang miyembro na may hindi bababa sa 15 taon ng serbisyo at 60 taong gulang ay eligible para sa retirement. Ang dalawang pangunahing opsyon ay: (a) 5-year lump sum (60 × Basic Monthly Pension) kasama ang Basic Monthly Pension for life mula sa katapusan ng 5-year period; o (b) Cash payment (18 × Basic Monthly Pension) kasama ang Basic Monthly Pension simula agad sa retirement.", "Category": "General", "Active": true}, {"ID": 81, "Question": "Ano ang GSIS Separation Benefits?", "Answer": "Ang miyembro na may 3 taon ngunit wala pang 15 taon ng serbisyo ay eligible para sa cash payment na katumbas ng 100% ng Average Monthly Compensation bawat taon ng serbisyo (payable sa pag-abot ng 60 taon o separation). Ang miyembro na may higit sa 15 taon ay may opsyon ng cash payment na katumbas ng 18 × Basic Monthly Pension.", "Category": "General", "Active": true}, {"ID": 82, "Question": "Ano ang Pag-IBIG benefits para sa faculty?", "Answer": "Ang Pag-IBIG Fund (HDMF) ay isang provident savings system. Ang mga miyembro ay eligible sa: (1) Expanded Housing Loan para sa pagbili o konstruksiyon ng bahay; (2) Multi-Purpose Loan (MPL) para sa medical, educational, livelihood, minor home improvement, at pagbili ng appliance; at (3) Provident Benefit pagkatapos ng 20 taon ng membership (240 contributions).", "Category": "General", "Active": true}, {"ID": 83, "Question": "Ano ang study privileges ng mga non-earning dependents ng faculty?", "Answer": "Ang mga non-earning dependents ng full-time regular faculty (permanent o may 5 taon ng aggregate service) ay entitled sa 100% waiver ng tuition, laboratory, at miscellaneous fees. Ang mga dependents ng part-time regular faculty (may ganoon ding kondisyon) ay entitled sa 50% discount. Ang pribilehiyo ay nananatili habang ang faculty ay aktibong naglilingkod (maliban sa ilang mga exception tulad ng sick leave).", "Category": "General", "Active": true}, {"ID": 84, "Question": "Ano ang study privileges ng mga non-earning dependents ng retired faculty?", "Answer": "Ang mga non-earning dependents ng mga retiree na nagreretiro sa compulsory retirement age o namatay habang nagtatrabaho ay patuloy na matatamasa ang tuition privileges. Kung naka-enrol na ang dependent sa panahon ng retirement, magpapatuloy ang pribilehiyo hanggang matapos ang degree. Kung hindi pa naka-enrol, maaari silang mag-enrol at matamasa ang pribilehiyo hanggang sa unang undergraduate degree.", "Category": "General", "Active": true}, {"ID": 85, "Question": "Ano ang UP Diliman Computer Loan Program?", "Answer": "Ang program na ito ay para sa full-time regular faculty (temporary o permanent) at permanent staff. Ang maximum loanable amount ay PHP 100,000.00, mababayaran sa 12 buwan (8% annual interest) o 24 buwan (9% annual interest), simula 2 buwan pagkatapos ng grant.", "Category": "General", "Active": true}, {"ID": 86, "Question": "Ano ang Longevity Pay sa UP?", "Answer": "Ito ay isang step increment na ibinibigay sa mga permanent employee para sa bawat 3 taon ng tuloy-tuloy na satisfactory service sa isang partikular na posisyon. Ito ay bahagi ng civil service benefits.", "Category": "General", "Active": true}, {"ID": 87, "Question": "Ano ang Loyalty Award?", "Answer": "Ito ay ibinibigay sa isang government employee na nakakumpleto ng hindi bababa sa 10 taon ng tuloy-tuloy at satisfactory service. Ang mga awardee ay makakatanggap ng loyalty memorabilia/souvenir at cash gift. Para sa 10 at 15 taon: bronze service pin; 20 at 25 taon: silver service ring; 30, 35, 40 taon: gold service medallion. Ang cash gift ay hindi bababa sa PHP 500 at hindi hihigit sa PHP 1,000 bawat taon ng serbisyo.", "Category": "General", "Active": true}, {"ID": 88, "Question": "Ano ang UP Provident Fund at sino ang mga eligible na miyembro?", "Answer": "Ang UP Provident Fund ay isang employee's retirement fund. Ang eligible na miyembro ay: regular full-time at half-time employees, permanent at temporary staff, at lahat ng tumatanggap ng sahod daily o monthly. Ang bawat miyembro ay nag-aambag ng hindi bababa sa 1% ng kanilang basic monthly pay at ang UP ay nagbibigay ng counterpart na halaga.", "Category": "General", "Active": true}, {"ID": 89, "Question": "Ano ang mga benepisyo ng UP Provident Fund?", "Answer": "Sa pagreretiro, total/permanent disability, o paghiwalay sa University, ang miyembro ay entitled sa refund ng kanyang equity balance (personal contribution + UP contribution + earnings, less outstanding loan balance). Sa kamatayan ng miyembro, ang kanyang mga legal heirs ay mababayaran kasama ang isang PHP 100,000 na insurance.", "Category": "General", "Active": true}, {"ID": 90, "Question": "Ano ang Professorial Chair at sino ang karapat-dapat?", "Answer": "Ang professorial chair ay isang paraan ng pagkilala para sa achievers sa academe. Kailangan ng kandidato na: regular faculty na may rank na Assistant Professor o mas mataas; may hindi bababa sa 5 taon ng serbisyo sa UP bilang faculty; at may outstanding performance sa teaching, intellectual productivity, at service. Ang appointment ay para sa 1 taon, maaaring i-renew, ngunit hindi maaaring hawakan ang higit sa isang chair sa iisang oras.", "Category": "General", "Active": true}, {"ID": 91, "Question": "Ano ang mga obligasyon ng isang holder ng Professorial Chair?", "Answer": "Sa loob ng isang taon pagkatapos ng appointment at bawat taon pagkataon, ang holder ay dapat: (1) mag-deliver ng public scholarly lecture sa kanyang espesyalisasyon; o (2) mag-publish ng scholarly paper sa isang reputable journal bilang sole o principal author; o (3) sa kaso ng visual o performing arts, mag-present ng creative work sa artistic performance o exhibition.", "Category": "General", "Active": true}, {"ID": 92, "Question": "Ano ang Faculty Grant?", "Answer": "Ang Faculty Grant ay ibinibigay batay sa: pagiging regular faculty; teaching/research potential; at academic credentials (preference sa mga may graduate degree). Ang grantee ay dapat mag-present ng 1-year plan ng activities tulad ng paghahanda ng instructional aids, book writing, o research project. Ang grant ay para sa 1 taon at maaaring i-renew.", "Category": "General", "Active": true}, {"ID": 93, "Question": "Ano ang International Publication Award (IPA)?", "Answer": "Ang IPA ay nagbibigay ng cash award sa mga faculty at REPS na naglathala sa mga journal na nakalista sa Institute for Scientific Information (ISI) Master Journal List, o sa mga recognized international academic book publishers. Ang mga eligible ay regular faculty, regular REPS (kasama ang regular UP contractual at casual employees), clinical faculty, at Professors Emeriti.", "Category": "General", "Active": true}, {"ID": 94, "Question": "Ano ang International Award for the Arts?", "Answer": "Ito ay nagbibigay ng pagkilala sa mga UP artists sa mga larangan ng visual at performing arts. Ang mga nominees ay dapat na regular faculty na nagkaroon ng international exposure sa nakaraang taon (public performance, exhibition, o commissioned works) at may commendations, citations, o testimonials para sa excellence at distinction.", "Category": "General", "Active": true}, {"ID": 95, "Question": "Ano ang Gawad sa Natatanging Publikasyon sa Filipino?", "Answer": "Ang Gawad ay nagkilala sa mga natatanging publikasyon sa Filipino ng mga regular faculty at REPS. May dalawang kategorya: (1) Gawad sa Malikhaing Panulat; at (2) Gawad para sa Publikasyon ng Orihinal na Pananaliksik. Tanging orihinal na akda lamang ang karapat-dapat; hindi kasama ang mga sinalin o nai-edit na mga akda.", "Category": "General", "Active": true}, {"ID": 96, "Question": "Ano ang President's Award for Innovation in Teaching?", "Answer": "Ito ay nagkilala sa excellent pedagogical innovations. May 4 na kategorya: (1) arts and humanities; (2) social sciences; (3 at 4) natural sciences at mathematics (2 slots dahil pinakamarami ang faculty dito). Hindi eligible ang mga faculty na may masamang track record sa pagtuturo.", "Category": "General", "Active": true}, {"ID": 97, "Question": "Ano ang University Professor?", "Answer": "Ito ang pinakamataas na rank sa University of the Philippines. Ibinibigay ito ng BOR sa isang select na ilang faculty sa active service para sa exemplary achievement sa kanilang field. Ang University Professor ay may sahod na katumbas ng Chancellor at may karapatang sa professorial chair at annual research grant.", "Category": "General", "Active": true}, {"ID": 98, "Question": "Ano ang Artist-in-Residence?", "Answer": "Ang Artist-in-Residence ay appointment para sa qualified faculty sa creative arts (literature, fine arts, music, atbp.). Ang term ay 1 taon, maaaring i-renew ngunit hindi hihigit sa 3 magkakasunod na taon. Ang mga pribilehiyo ay: teaching load na 3-6 units per semester, honorarium bukod sa full salary, at cumulative vacation at sick leaves sa panahon ng appointment.", "Category": "General", "Active": true}, {"ID": 99, "Question": "Ano ang Professor Emeritus at ano ang mga pamantayan?", "Answer": "Ang Professor Emeritus ay maaaring i-appoint sa isang retired faculty na may rank na Professor na: (1) may hindi bababa sa 20 taon ng aktibo at tapat na serbisyo sa University; (2) nakamit ang markadong distinction bilang productive scholar, artist, o scientist, o kinikilala bilang epektibo at dedikadong guro. Ito ay isang titulo para sa buhabuhay.", "Category": "General", "Active": true}, {"ID": 100, "Question": "Ano ang mga lifetime privileges ng isang Professor Emeritus?", "Answer": "Kasama sa lifetime privileges ang: certificate ng Emeritus status; inclusion sa faculty listing at directory; UP ID card; library privileges; inclusion sa UP mailing list para sa newsletters; access sa common Professors Emeriti room na may computer at e-mail; e-mail account; health service privilege sa UP Health Service (para sa Emeritus lamang, hindi kasama ang pamilya); imbitasyon sa conferment ng honorary degrees at graduation exercises; at libreng admission sa cultural shows sa UP.", "Category": "General", "Active": true}, {"ID": 101, "Question": "Ano ang Gawad Chanselor at ano ang mga kategorya nito?", "Answer": "Ang Gawad Chanselor ay taunang parangal sa mga miyembro ng UP Diliman community na nagpakita ng outstanding performance. Kasama sa mga kategorya ang: Pinakamahusay na Guro, Pinakamahusay na Mananaliksik, Pinakamahusay na Nilathalang Pananaliksik, Pinakamahusay na REPS, Pinakamahusay na Imbensiyon at Inobasyon, Pinakamahusay na Administrador, Pinakamahusay na Empleyadong Administratibo, Pinakamahusay na Atleta/Koponang Varsity, at iba pa.", "Category": "General", "Active": true}, {"ID": 102, "Question": "Ano ang Faculty Fellowship at ano ang kaibahan nito sa Study Leave?", "Answer": "Ang fellowship ay ibinibigay sa mga pinaka-capable at promising na faculty sa mga priority areas. Ang mga Fellow ay nakakatanggap ng full de-loading, full salary, tuition waiver, at iba pang entitlements. Ang pangunahing pagkakaiba ay ang fellowship ay ibinibigay ayon sa merit at selection, habang ang study leave with pay ay approval batay sa qualifications.", "Category": "General", "Active": true}, {"ID": 103, "Question": "Ano ang mga entitlement ng Faculty Fellows (local o foreign)?", "Answer": "Kabilang sa entitlements: (1) Full de-loading mula sa regular faculty duties; (2) Full salary at iba pang benepisyo ng regular faculty sa active service; (3) Tuition assistance, book allowance, thesis/dissertation allowance, travel assistance; (4) Karapatang sa faculty office o desk space (para sa local Fellows); at (5) Retensiyon ng sariling faculty item sa panahon ng award.", "Category": "General", "Active": true}, {"ID": 104, "Question": "Ano ang Foreign Fellowship at ano ang mga additional na benepisyo nito?", "Answer": "Para sa full foreign fellowship, bukod sa regular entitlements, kasama rin: pre-travel allowance, airfare, tuition at lahat ng school fees, book allowance, thesis aid, monthly stipend, clothing allowance, at family allowance (katumbas ng monthly salary) kung may asawa o dependents. Ang return service obligation ay 2 taon para sa bawat taon ng fellowship abroad.", "Category": "General", "Active": true}, {"ID": 105, "Question": "Ano ang Doctoral Studies Fund?", "Answer": "Ito ay nagtatangkang makagawa ng 100 faculty na may Ph.D. sa mga selected na disiplina sa pamamagitan ng local o foreign faculty fellowships para sa full doctoral study. Ang mga eligible ay regular faculty na may MA/MS mula sa mga itinalagang field, may maayos na track record, na hindi hihigit sa Assistant Professor, at wala pang 45 taong gulang sa panahon ng application.", "Category": "General", "Active": true}, {"ID": 106, "Question": "Ano ang Ph.D. Incentive Grant at Sandwich Program?", "Answer": "Ang grant ay dinisenyo para sa mga faculty na nasa final year ng kanilang Ph.D. program sa isang foreign university at nangangailangan ng financial support para tapusin ang degree. Sumasaklaw rin ito sa hanggang 1 taon ng pag-aaral abroad sa ilalim ng Ph.D. 'sandwich' program. Ang grant ay sumasaklaw ng pre-travel allowance, airfare, living allowance, at iba pang bayarin.", "Category": "General", "Active": true}, {"ID": 107, "Question": "Ano ang Post-Doctoral Research Grant?", "Answer": "Para sa regular full-time faculty o REPS na nakakuha ng Ph.D. sa nakaraang 3 taon. Preference sa mga nagmula sa UP o Philippine university. Sumasaklaw ng 6-12 buwan ng research sa isang kilalang foreign institution. Kasama sa entitlements ang airfare at living expenses. Dapat mag-submit ng mid-term at final report.", "Category": "General", "Active": true}, {"ID": 108, "Question": "Ano ang Textbook Writing Grant?", "Answer": "Sumasaklaw sa pagsulat ng textbooks, reference books, creative works, workbooks, at laboratory manuals. Available sa regular full-time faculty na may rank na Assistant Professor o mas mataas. Ang grant ay para sa 1 taon (maaaring i-extend ng hanggang 6 buwan sa exceptional cases). Hindi sumasaklaw sa mga non-degree at graduate programs, at hindi sumasaklaw ng publication costs.", "Category": "General", "Active": true}, {"ID": 109, "Question": "Ano ang Research and Creative Work Grant?", "Answer": "Sumasaklaw sa research at creative projects sa anumang field (basic at applied) na naaayon sa disiplina ng aplikante. Available sa regular full-time faculty at REPS, may rank na Assistant Professor o mas mataas. Para sa 1 taon (maaaring i-extend ng hanggang 6 buwan). Ang final output ay kailangang manuscript, invention, o artistic work sa acceptable form.", "Category": "General", "Active": true}, {"ID": 110, "Question": "Ano ang Incentive Scheme para sa Faculty Administrators?", "Answer": "Binibigyan ng mga faculty administrator ng research support grant sa panahon ng kanilang term (para sa mga may 12-unit ALC: isang grant bawat taon; para sa Vice Chancellors, Deans, atbp.: isa sa buong term). Mayroon ding limited financial assistance para sa annual executive check-up sa PGH, at maaaring mag-apply para sa professorial chair kahit walang active research track record (maliban sa GE Chairs).", "Category": "General", "Active": true}, {"ID": 111, "Question": "Ano ang entitlement para sa attendance sa conferences, seminars, at workshops?", "Answer": "Ang pangunahing sources ng support sa UPD ay ang Faculty Development Fund (FDF)/Research Dissemination Grant (RDG) para sa faculty. Ang mga requirements ay: imbitasyon mula sa sponsoring organization; kopya ng abstract at paper (kung magpapresenta); at endorsement ng department chair/institute director at dean. Kasama sa entitlements ang sahod sa panahon ng grant at iba pang allowances na permitted ng pamahalaan.", "Category": "General", "Active": true}, {"ID": 112, "Question": "Ano ang Code of Ethics ng UP Faculty?", "Answer": "Ang UP Faculty Code of Ethics ay isang sampung-puntong pangako na kinabibilangan ng: pagtataguyod ng karangalan ng UP; pag-pursue ng excellence sa pagtuturo, pananaliksik, at extension; pagtataguyod ng nasyonalismo at social justice; pag-iingat ng academic freedom; pagpapunla ng pagmamahal sa kaalaman sa mga estudyante; pakikiugnayan sa mga kasamahan nang may kooperasyon at propesyonalismo; at pagsunod sa mga batas at University Code.", "Category": "General", "Active": true}, {"ID": 113, "Question": "Maaari bang mag-enrol ang faculty bilang estudyante?", "Answer": "Oo, ngunit kailangan ng pahintulot ng Dean o Director at ng Chancellor. Ang pahintulot ay maibibigay lamang kung, sa pagsaalang-alang ng teaching load at uri ng kurso, ang pag-aaral ay hindi makakasama sa kahusayan ng faculty bilang miyembro ng faculty.", "Category": "General", "Active": true}, {"ID": 114, "Question": "Maaari bang magturo ang faculty sa ibang institusyon?", "Answer": "Bilang general rule, ang mga full-time faculty na may administrative o research/creative workload credit ay hindi dapat magturo sa ibang educational o training institution. Sa exceptional cases, maaaring magbigay ng pahintulot ang Presidente o Chancellor kahit walang MOA sa pagitan ng mga institusyon, ngunit may mga kondisyon (ang isa sa mga ito: hindi hihigit sa 6 units ang outside teaching load).", "Category": "General", "Active": true}, {"ID": 115, "Question": "Ano ang mga patakaran sa pagtuturo sa ibang unibersidad?", "Answer": "Kailangan ng: (1) MOA sa pagitan ng UP at ng ibang unibersidad; (2) specific authorization ng Chancellor; (3) pag-apruba ng Dean at Department Chair; (4) maximum na 6 units outside teaching load per semester; (5) ang total load kasama ang outside teaching ay hindi dapat lumampas sa 21 units; (6) ang outside teaching ay dapat sa labas ng regular office hours; at (7) hindi maaaring hawakan ang anumang administrative function sa ibang unibersidad.", "Category": "General", "Active": true}, {"ID": 116, "Question": "Ano ang limitasyon sa honoraria na maaaring matanggap ng faculty?", "Answer": "Ang anumang opisyal o empleyado ay maaaring lumahok sa higit sa isang proyekto, ngunit ang kabuuang honoraria ay hindi dapat lumampas sa 50% ng kanyang taunang sahod. Ang limitasyong ito ay HINDI nalalapat sa overload honoraria at honoraria na tinatanggap ng faculty administrators. Ang mga guro ng government schools na nagtuturo ng higit sa regular load ay maaaring bayaran ng karagdagang kompensasyon na hindi hihigit sa 75% ng kanilang basic salary.", "Category": "General", "Active": true}, {"ID": 117, "Question": "Ano ang patakaran sa Absence Without Leave (AWOL)?", "Answer": "Ang University personnel na AWOL ng hindi bababa sa 30 araw ay aaalisin sa roster (dropped from the rolls).", "Category": "General", "Active": true}, {"ID": 118, "Question": "Ano ang patakaran sa private tutoring?", "Answer": "Walang miyembro ng faculty ang maaaring magbigay ng private lessons sa anumang estudyante na naka-enrol sa kanyang kolehiyo o paaralan at tumanggap ng bayad para dito nang wala ang nakaraang pahintulot ng Presidente.", "Category": "General", "Active": true}, {"ID": 119, "Question": "Ano ang patakaran sa inviting outside lecturers sa klase?", "Answer": "Maaaring mag-invite ang faculty ng expert na hindi konektado sa University para magbigay ng lecture o talk basta ang kabuuang bilang ng lecture hours ay hindi hihigit sa 9 hours sa isang semester. Kailangan ng consent ng Department Chair (4.5 hours o mas kaunti) o ng Dean (higit sa 4.5 hours hanggang 9 hours). Dapat naroroon ang faculty sa lahat ng lectures.", "Category": "General", "Active": true}, {"ID": 120, "Question": "Ano ang proseso para sa limited practice of profession?", "Answer": "Kailangan ng prior permission ng Chancellor. Ang pahintulot ay para sa tiyak na panahon ng 1 taon, maaaring i-renew taon-taon sa discretion ng Chancellor. Ang limitadong practice ay hindi dapat: kontra sa interes ng University; isasagawa sa official time; at dapat magpapabuti ng kahusayan ng faculty sa University.", "Category": "General", "Active": true}, {"ID": 121, "Question": "Ano ang sexual harassment ayon sa UP Faculty Manual?", "Answer": "Ang sexual harassment ay ang pag-demand, pag-request, o pag-require ng anumang sexual favor mula sa isa pang tao ng isang opisyal, faculty, empleyado, coach, trainor, o sinumang may awtoridad, impluwensya, o moral ascendancy sa kanya, anuman ang mga kalagayan ng pagtanggap. Sumasaklaw ito sa mga work-related at academic/teaching environments.", "Category": "General", "Active": true}, {"ID": 122, "Question": "Ano ang mga parusa para sa sexual harassment sa UP?", "Answer": "Ang sexual harassment ay pinarurusahan bilang: (1) Simple Misconduct — 1st offense: 1 buwan at 1 araw hanggang 6 buwan na suspensyon; 2nd offense: 1 taon na suspensyon; 3rd offense: dismissal. (2) Conduct Prejudicial to Best Interest of Service o Disgraceful and Immoral Conduct — 1st: 6 buwan at 1 araw hanggang 1 taon; 2nd: dismissal. (3) Grave Misconduct — 1st: dismissal at permanent disqualification sa government employment sa University System.", "Category": "General", "Active": true}, {"ID": 123, "Question": "Ano ang patakaran sa complaints against other faculty members?", "Answer": "Walang miyembro ng faculty, opisyal, o empleyado ang maaaring mag-publish o talakayin sa publiko ang mga sumbong o reklamo laban sa ibang miyembro ng faculty tungkol sa opisyal na tungkulin o pribadong buhay. Ang anumang reklamo ay dapat i-address sa mga tamang awtoridad ng University bago kumilos ng iba.", "Category": "General", "Active": true}, {"ID": 124, "Question": "Ano ang patakaran sa foreign travels ng faculty?", "Answer": "Walang faculty ang maaaring maglakbay ng higit sa isang buwan nang wala ang clearance mula sa academic responsibilities. Para sa paglalakbay na nangangailangan ng Malacañang clearance: kailangan ng hindi bababa sa 10 working days na lead time. Ang Malacañang clearance ay kailangan kapag: (1) gagamitin ang government funds; o (2) higit sa isang faculty ang pupunta sa iisang destinasyon para sa iisang layunin.", "Category": "General", "Active": true}, {"ID": 125, "Question": "Ano ang term of office ng Dean?", "Answer": "Ang term ng Dean ay 3 taon mula sa petsa ng appointment, nang hindi pinipigilan ang muling paghirang. Maaari silang maglingkod ng 2 terms sa kabuuan. Sa napaka-exceptional na kaso lamang maaaring payagan ang karagdagang term.", "Category": "General", "Active": true}, {"ID": 126, "Question": "Ano ang kinakailangan para mag-appoint ng Associate Dean?", "Answer": "Maaaring irekomenda ng Dean ng kolehiyo ang appointment ng Associate Dean kung ang kolehiyo ay may 50 o higit pang regular faculty at 200 o higit pang student majors. Ang term ng Associate Dean ay ayon sa itinakda ng Chancellor batay sa rekomendasyon ng incumbent Dean.", "Category": "General", "Active": true}, {"ID": 127, "Question": "Ano ang kinakailangan para mag-appoint ng Department Assistant Chair o Institute Deputy Director?", "Answer": "Para sa mga department o institute na may hindi bababa sa 25 regular faculty/staff at/o 100 student majors. Maaaring mag-appoint ng isa pang Assistant Chair kung ang bilang ng regular faculty/staff ay 50 o higit pa at/o 200 o higit na student majors, basta hindi nairerekomenda ang Associate Dean o Deputy Director sa college level.", "Category": "General", "Active": true}, {"ID": 128, "Question": "Ano ang term of office ng Department Chair?", "Answer": "Hindi hihigit sa 3 taon, maaaring i-renew para sa isa pang term ng hindi hihigit sa 3 taon (maximum na 6 taon). Sa exceptionally meritorious na kaso, maaaring mag-approve ang Chancellor ng renewal ng appointment ng isang chair beyond the 6th year para sa final term na hindi hihigit sa 3 taon. Hindi maaaring maglingkod ang isang chair ng mahigit sa 9 magkakasunod na taon.", "Category": "General", "Active": true}, {"ID": 129, "Question": "Ano ang mga tungkulin ng College Secretary?", "Answer": "Ang mga tungkulin ng College Secretary ay: (1) mag-imporma sa mga estudyante ng kanilang schedule, curricula, at iba pa sa panahon ng registration; (2) tumulong sa supervision ng student activities; (3) tumulong sa pagpapatupad ng mga desisyon ng mga komite ng kolehiyo; (4) tiyaking natutupad ang mga graduation requirements; at (5) gawin ang iba pang tungkuling itinalaga ng Dean/Director.", "Category": "General", "Active": true}, {"ID": 130, "Question": "Ano ang AIRA?", "Answer": "Ang AIRA (Admin Inventory Request & Automation) ay ang supply request system ng CHK. I-access dito: https://sites.google.com/up.edu.ph/chk360/a-i-r-a", "Category": "Supply", "Active": true}];
+
+  // ══════════════════════════════════════
+  // TIER 1.5: Fuzzy KB_QA Lookup
+  // Tokenize + score each entry against user input
+  // Runs before AI fallback to avoid unnecessary API calls
+  // ══════════════════════════════════════
+  function resolveKBQA(input) {
+    const normalize = s => s.toLowerCase()
+      .replace(/[^a-z0-9\s\u00c0-\u024f\u1e00-\u1eff]/gi, ' ')
+      .replace(/\s+/g, ' ').trim();
+
+    const tokenize = s => normalize(s).split(' ').filter(w => w.length > 2);
+
+    const inputNorm = normalize(input);
+    const inputTokens = tokenize(input);
+    if (inputTokens.length === 0) return null;
+
+    let bestScore = 0, bestEntry = null;
+
+    // Build bigrams from input for phrase matching
+    const buildBigrams = tokens => tokens.slice(0,-1).map((w,i) => w+' '+tokens[i+1]);
+    const inputBigrams = buildBigrams(inputTokens);
+
+    for (const entry of KB_QA) {
+      if (!entry.Active) continue;
+      const qNorm = normalize(entry.Question);
+      const aNorm = normalize(entry.Answer);
+      const qTokens = tokenize(entry.Question);
+
+      let score = 0;
+
+      // Exact substring match (highest priority)
+      if (qNorm.includes(inputNorm) || inputNorm.includes(qNorm)) {
+        score += 80;
+      }
+
+      // Partial phrase match: 3+ consecutive words from input found in question
+      for (let len = inputTokens.length; len >= 3; len--) {
+        for (let start = 0; start <= inputTokens.length - len; start++) {
+          const phrase = inputTokens.slice(start, start + len).join(' ');
+          if (qNorm.includes(phrase)) {
+            score += 20 + len * 5; // longer phrase = bigger boost
+          }
+        }
+      }
+
+      // Bigram bonus: two-word phrases found in question
+      inputBigrams.forEach(bg => {
+        if (qNorm.includes(bg)) score += 12;
+      });
+
+      // Token overlap score
+      const matchedTokens = inputTokens.filter(t => qNorm.includes(t) || aNorm.includes(t));
+      const qMatchedTokens = inputTokens.filter(t => qNorm.includes(t));
+      score += (qMatchedTokens.length / Math.max(inputTokens.length, qTokens.length)) * 35;
+
+      // Keyword bonus: longer matching tokens are more significant
+      matchedTokens.forEach(t => {
+        if (t.length >= 6) score += 5;
+        else if (t.length >= 4) score += 3;
+      });
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestEntry = entry;
+      }
+    }
+
+    // Only return if confident enough
+    return bestScore >= 18 ? bestEntry : null;
+  }
+
+  function formatKBQAResponse(entry) {
+    // Convert URLs in answer to clickable links
+    const linked = entry.Answer.replace(
+      /(https?:\/\/[^\s]+)/g,
+      '<a href="$1" target="_blank">$1</a>'
+    );
+    return linked;
+  }
+
+  // ══════════════════════════════════════
+  // STATIC KB RESOLVER
+  // ══════════════════════════════════════
+  function resolveStatic(t){
+    t = t.toLowerCase().trim();
+    for(const[,e] of Object.entries(KB)){
+      if(e.triggers.some(tr => {
+        const needle = tr.trim();
+        if(needle.length <= 3){
+          const re = new RegExp('(?:^|\s)' + needle.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '(?:\s|$)');
+          return re.test(t);
+        }
+        return t.includes(needle);
+      })) return e;
+    }
+    return null;
+  }
+
+  // ══════════════════════════════════════
+  // DOM REFS
+  // ══════════════════════════════════════
+  const launcher   = document.getElementById('chk-bot-launcher');
+  const chatWin    = document.getElementById('chk-chat-win');
+  const closeBtn   = document.getElementById('chk-close-btn');
+  const refreshBtn = document.getElementById('chk-refresh-btn');
+  const header     = document.getElementById('chk-chat-header');
+  const msgBox     = document.getElementById('chk-messages');
+  const chipsBox   = document.getElementById('chk-chips');
+  const inputEl    = document.getElementById('chk-input');
+  const sendBtn    = document.getElementById('chk-send-btn');
+  let isOpen = false;
+
+  // ══════════════════════════════════════
+  // DRAGGING — LAUNCHER
+  // ══════════════════════════════════════
+  let drag={active:false,isTouch:false,startX:0,startY:0,origX:0,origY:0,curX:0,curY:0,vx:0,vy:0,lastT:0,lastX:0,lastY:0,moved:false,rafId:null};
+  const THRESH=8,SNAP=14;
+  function getLXY(){const r=launcher.getBoundingClientRect();return{x:r.left,y:r.top};}
+  function clampL(x,y){const mX=window.innerWidth-launcher.offsetWidth,mY=window.innerHeight-launcher.offsetHeight;return{x:Math.max(8,Math.min(x,mX-8)),y:Math.max(8,Math.min(y,mY-8))};}
+  function applyL(x,y){launcher.style.left=x+'px';launcher.style.top=y+'px';launcher.style.right='auto';launcher.style.bottom='auto';}
+  function rafLoop(){if(!drag.active)return;const c=clampL(drag.curX,drag.curY);applyL(c.x,c.y);drag.rafId=requestAnimationFrame(rafLoop);}
+  function dragStart(e){e.stopPropagation();const iT=!!e.touches,p=iT?e.touches[0]:e,xy=getLXY();drag={active:true,isTouch:iT,startX:p.clientX,startY:p.clientY,origX:xy.x,origY:xy.y,curX:xy.x,curY:xy.y,vx:0,vy:0,lastT:performance.now(),lastX:p.clientX,lastY:p.clientY,moved:false,rafId:null};launcher.classList.add('chk-dragging');cancelAnimationFrame(drag.rafId);drag.rafId=requestAnimationFrame(rafLoop);if(iT)e.preventDefault();}
+  function dragMove(e){if(!drag.active)return;e.stopPropagation();const p=e.touches?e.touches[0]:e,dx=p.clientX-drag.startX,dy=p.clientY-drag.startY;if(!drag.moved&&(Math.abs(dx)>THRESH||Math.abs(dy)>THRESH))drag.moved=true;if(drag.moved){const now=performance.now(),dt=Math.max(1,now-drag.lastT);drag.vx=(p.clientX-drag.lastX)/dt;drag.vy=(p.clientY-drag.lastY)/dt;drag.lastT=now;drag.lastX=p.clientX;drag.lastY=p.clientY;drag.curX=drag.origX+dx;drag.curY=drag.origY+dy;if(e.cancelable)e.preventDefault();}}
+  function dragEnd(e){if(!drag.active)return;if(e&&e.target&&chatWin.contains(e.target))return;drag.active=false;cancelAnimationFrame(drag.rafId);launcher.classList.remove('chk-dragging');if(drag.moved){let{curX:x,curY:y,vx,vy}=drag;(function glide(){vx*=0.86;vy*=0.86;x+=vx*16;y+=vy*16;const c=clampL(x,y);if(c.x!==x||c.y!==y){vx=0;vy=0;x=c.x;y=c.y;}applyL(x,y);if(Math.abs(vx)>0.04||Math.abs(vy)>0.04){requestAnimationFrame(glide);}else{const mX=window.innerWidth-launcher.offsetWidth,mY=window.innerHeight-launcher.offsetHeight;let nx=x,ny=y;if(x<SNAP)nx=8;if(x>mX-SNAP)nx=mX-8;if(y<SNAP)ny=8;if(y>mY-SNAP)ny=mY-8;if(nx!==x||ny!==y){launcher.style.transition='left .3s cubic-bezier(.25,.8,.25,1),top .3s cubic-bezier(.25,.8,.25,1)';applyL(nx,ny);setTimeout(()=>{launcher.style.transition='';},320);}setTimeout(()=>{launcher.style.animation='chk-float 3.6s ease-in-out infinite';},350);}})();}else{launcher.style.animation='chk-float 3.6s ease-in-out infinite';toggleChat();}}
+  launcher.addEventListener('mousedown',dragStart,{passive:false});
+  launcher.addEventListener('touchstart',dragStart,{passive:false});
+  document.addEventListener('mousemove',dragMove,{passive:false});
+  document.addEventListener('touchmove',dragMove,{passive:false});
+  document.addEventListener('mouseup',(e)=>dragEnd(e));
+  document.addEventListener('touchend',(e)=>dragEnd(e));
+
+  // ══════════════════════════════════════
+  // DRAGGING — CHAT WINDOW
+  // ══════════════════════════════════════
+  let wD={active:false,startX:0,startY:0,origX:0,origY:0};
+  function wDS(e){if(e.target===closeBtn)return;e.stopPropagation();const p=e.touches?e.touches[0]:e,r=chatWin.getBoundingClientRect();wD={active:true,startX:p.clientX,startY:p.clientY,origX:r.left,origY:r.top};chatWin.style.transition='none';chatWin.classList.add('chk-win-dragging');}
+  function wDM(e){if(!wD.active)return;e.stopPropagation();const p=e.touches?e.touches[0]:e;let nx=wD.origX+(p.clientX-wD.startX),ny=wD.origY+(p.clientY-wD.startY);nx=Math.max(0,Math.min(nx,window.innerWidth-chatWin.offsetWidth));ny=Math.max(0,Math.min(ny,window.innerHeight-chatWin.offsetHeight));chatWin.style.left=nx+'px';chatWin.style.top=ny+'px';chatWin.style.right='auto';chatWin.style.bottom='auto';if(e.cancelable)e.preventDefault();}
+  function wDE(){wD.active=false;chatWin.style.transition='';chatWin.classList.remove('chk-win-dragging');}
+  header.addEventListener('mousedown',wDS,{passive:false});header.addEventListener('touchstart',wDS,{passive:false});
+  document.addEventListener('mousemove',wDM,{passive:false});document.addEventListener('touchmove',wDM,{passive:false});
+  document.addEventListener('mouseup',wDE);document.addEventListener('touchend',wDE);
+
+  /* 3D tilt */
+  chatWin.addEventListener('mousemove',(e)=>{if(!isOpen||window.innerWidth<=520)return;const r=chatWin.getBoundingClientRect(),dx=(e.clientX-(r.left+r.width/2))/(r.width/2),dy=(e.clientY-(r.top+r.height/2))/(r.height/2);chatWin.style.transform=`scale(1) translateY(0) perspective(800px) rotateY(${dx*3}deg) rotateX(${-dy*2}deg)`;});
+  chatWin.addEventListener('mouseleave',()=>{chatWin.style.transform='scale(1) translateY(0) perspective(600px) rotateX(0deg)';});
+
+  // ══════════════════════════════════════
+  // OPEN / CLOSE
+  // ══════════════════════════════════════
+  function toggleChat(){isOpen?closeChat():openChat();}
+  function openChat(){
+    isOpen=true;chatWin.classList.add('chk-open');
+    const lr=launcher.getBoundingClientRect(),wW=Math.min(360,window.innerWidth-16),wH=Math.min(600,window.innerHeight*0.82);
+    let wx,wy;
+    if(window.innerWidth>520){wx=lr.right-wW;wy=lr.top-wH-10;if(wx<8)wx=8;if(wy<8)wy=8;if(wx+wW>window.innerWidth-8)wx=window.innerWidth-wW-8;}
+    else{wx=8;if(lr.top-wH-10>=8){wy=lr.top-wH-10;}else{wy=lr.bottom+10;}if(wy+wH>window.innerHeight-8)wy=window.innerHeight-wH-8;if(wy<8)wy=8;}
+    chatWin.style.left=wx+'px';chatWin.style.top=wy+'px';chatWin.style.right='auto';chatWin.style.bottom='auto';
+    chatWin.style.width=wW+'px';chatWin.style.maxHeight=wH+'px';
+    if(msgBox.children.length===0) setTimeout(()=>addMsg('bot',KB.greet.response,KB.greet.chips),300);
+    if(window.innerWidth>520) setTimeout(()=>inputEl.focus(),380);
+  }
+  function closeChat(){isOpen=false;chatWin.classList.remove('chk-open');}
+  closeBtn.addEventListener('click',(e)=>{e.stopPropagation();closeChat();});
+  refreshBtn.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    msgBox.innerHTML='';chipsBox.innerHTML='';inputEl.value='';
+    refreshBtn.style.transition='transform .5s cubic-bezier(.4,2,.6,1)';
+    refreshBtn.style.transform='rotate(360deg) scale(1.15)';
+    setTimeout(()=>{refreshBtn.style.transition='';refreshBtn.style.transform='';},520);
+    setTimeout(()=>addMsg('bot',KB.greet.response,KB.greet.chips),300);
+  });
+  refreshBtn.addEventListener('touchend',(e)=>{e.stopPropagation();},true);
+
+  // ══════════════════════════════════════
+  // MESSAGING
+  // ══════════════════════════════════════
+  function addMsg(role, html, chips){
+    const d = document.createElement('div');
+    d.className = 'chk-msg ' + role;
+    if(role === 'bot') {
+      html = html.replace(/\n/g, '<br>');
+    }
+    d.innerHTML = html;
+    msgBox.appendChild(d);
+    requestAnimationFrame(()=>{msgBox.scrollTop=msgBox.scrollHeight;});
+    if(chips) renderChips(chips);
+  }
+
+  function showTyping(){
+    const d=document.createElement('div');d.className='chk-msg bot';d.id='chk-typ';
+    d.innerHTML='<div class="chk-typing"><span></span><span></span><span></span></div>';
+    msgBox.appendChild(d);requestAnimationFrame(()=>{msgBox.scrollTop=msgBox.scrollHeight;});
+  }
+  function removeTyping(){const t=document.getElementById('chk-typ');if(t)t.remove();}
+
+  function renderChips(chips){
+    chipsBox.innerHTML='';
+    chips.forEach(lb=>{
+      const b=document.createElement('button');b.className='chk-chip';b.textContent=lb;
+      b.addEventListener('click',(e)=>{e.stopPropagation();handleInput(lb);});
+      chipsBox.appendChild(b);
+    });
+  }
+
+  // ══════════════════════════════════════
+  // MAIN HANDLER — 2-tier lookup
+  //
+  // Tier 1: Static KB keyword match (instant, no network)
+  //         Handles all known chips, greetings, forms, etc.
+  //
+  // Tier 1.5: Embedded KB_QA fuzzy match (instant, no network)
+  //           Handles Q&A entries embedded from spreadsheet.
+  //
+  // Tier 2: (Placeholder) — plug in your AI integration here.
+  // ══════════════════════════════════════
+  async function handleInput(text){
+    if(!text.trim()) return;
+    chipsBox.innerHTML='';
+    addMsg('user', text);
+    inputEl.value='';
+    showTyping();
+
+    const lowerText = text.toLowerCase().trim();
+
+    // Tier 1a: Chip map → static KB (instant)
+    const ck = CHIP_MAP[text];
+    if(ck && KB[ck]){
+      setTimeout(()=>{removeTyping();addMsg('bot',KB[ck].response,KB[ck].chips);},400);
+      return;
+    }
+
+    // Tier 1b: Static KB keyword match (instant)
+    const staticMatch = resolveStatic(lowerText);
+    if(staticMatch){
+      setTimeout(()=>{removeTyping();addMsg('bot',staticMatch.response,staticMatch.chips);},450);
+      return;
+    }
+
+    // Tier 1.5: Embedded KB_QA fuzzy match (instant, no network)
+    const kbMatch = resolveKBQA(lowerText);
+    if (kbMatch) {
+      setTimeout(() => {
+        removeTyping();
+        addMsg('bot', formatKBQAResponse(kbMatch), ['Back to Menu', 'Reservations', 'Admin Forms']);
+      }, 380);
+      return;
+    }
+
+    // Tier 2: Gemini AI — answers anything not caught by KB
+    try {
+      const reply = await askGemini(text);
+      removeTyping();
+      if (reply) {
+        addMsg('bot', reply, ['Back to Menu', 'Reservations', 'Admin Forms']);
+        logToFirestore(text, reply);
+      } else {
+        addMsg('bot',
+          'Hoy pre, hindi ko naintindihan yan. 😅<br><i style="opacity:.7;font-size:12px">Siguro out of scope yan. Try mo mag-tanong tungkol sa forms, reservations, o dashboards.</i>',
+          ['Reservations','Admin Forms','Venue Calendars','Help']
+        );
+      }
+    } catch(err) {
+      removeTyping();
+      console.error('Gemini error:', err);
+      addMsg('bot',
+        'May error, tol. 😅 Subukan mo ulit o pumunta na sa Admin Office directly.',
+        ['Back to Menu','Help']
+      );
+    }
+  }
+
+  // ══════════════════════════════════════
+  // GEMINI AI INTEGRATION
+  // ══════════════════════════════════════
+  const GEMINI_API_KEY = 'AIzaSyCi0Ar8eG2GreBlZEQElrNemwwz0lQsD4c';
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+  let geminiHistory = [];
+
+  const CHIKITO_SYSTEM = `Ikaw si CHiKito — ang friendly admin assistant chatbot ng CHK Administrative Portal ng UP Diliman (College of Human Kinetics).
+
+PERSONALITY:
+- Sumasagot sa Taglish (halo ng Tagalog at English) — natural, chill, at friendly
+- Tinatawag ang user na "pre", "tol", o "boss" paminsan-minsan
+- May sense of humor pero propesyonal pagdating sa trabaho
+- Hindi nagbibigay ng maling impormasyon — kung hindi alam, honest na nagsasabi
+
+SCOPE NG KAALAMAN:
+- CHK Admin forms: Venue Reservation, Vehicle Reservation, Work Order, Fund Request, Meal Request, CHK RAP, PPMP, COS Wellness Leave
+- CHK Dashboards: Area Dashboard, Trip Dashboard, Stock Dashboard
+- A.I.R.A. (Admin Inventory Request & Automation)
+- Venue Calendars ng 17 sports venues ng CHK
+- UP Faculty Manual — leave policies, tenure, teaching load, benefits, atbp.
+- General na tanong tungkol sa CHK Admin Office
+
+MAHALAGANG LINKS:
+- CHK Portal: https://sites.google.com/up.edu.ph/chk360
+- Venue Reservation Form: https://docs.google.com/forms/d/e/1FAIpQLSev3CV8mQ6YzfnugoWmSEkUgDEMt_cEDegbTKvKKHD9wwdsNA/viewform
+- Vehicle Reservation Form: https://docs.google.com/forms/d/e/1FAIpQLScRsNYHsOw1Iv_vW4Oy4A8j6vSRWEWl-Dr7Fpk8AhAxc2hJQA/viewform
+- A.I.R.A.: https://sites.google.com/up.edu.ph/chk360/a-i-r-a
+- Admin Office: Varsity Training Center, Magsaysay Ave, UP Diliman — bukas 8AM-5PM, Lunes-Biyernes
+
+RULES:
+- Laging sumagot sa Taglish
+- Kung may link na relevant, ibigay mo
+- Kung hindi ka sigurado, sabihin mo na makipag-ugnayan sa CHK Admin Office
+- Huwag mag-imbento ng forms o links na hindi mo alam
+- Maging makulit pero helpful — CHiKito style!`;
+
+  async function askGemini(userMessage) {
+    // Build conversation history for context
+    const contents = [];
+
+    // Add recent history (last 6 exchanges)
+    geminiHistory.slice(-12).forEach(h => {
+      contents.push({ role: h.role, parts: [{ text: h.text }] });
+    });
+
+    // Add current message
+    contents.push({ role: 'user', parts: [{ text: userMessage }] });
+
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: CHIKITO_SYSTEM }] },
+        contents: contents,
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 400,
+        }
+      })
+    });
+
+    if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+
+    const data = await res.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+    if (reply) {
+      // Save to history
+      geminiHistory.push({ role: 'user', text: userMessage });
+      geminiHistory.push({ role: 'model', text: reply });
+      if (geminiHistory.length > 20) geminiHistory = geminiHistory.slice(-20);
+    }
+
+    return reply || null;
+  }
+
+  // ══════════════════════════════════════
+  // FIREBASE FIRESTORE LOGGING
+  // Logs unanswered questions to Firestore
+  // so you can review and improve your KB
+  // ══════════════════════════════════════
+  async function logToFirestore(question, answer) {
+    try {
+      const { db } = window._chkFirebase || {};
+      if (!db) return;
+      const { collection, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js');
+      await addDoc(collection(db, 'chikito_logs'), {
+        question: question,
+        answer: answer,
+        timestamp: serverTimestamp(),
+        source: 'gemini'
+      });
+    } catch(e) {
+      console.warn('Firestore log failed:', e);
+    }
+  }
+
+  sendBtn.addEventListener('click',(e)=>{e.stopPropagation();handleInput(inputEl.value);});
+  sendBtn.addEventListener('touchend',(e)=>{e.stopPropagation();},true);
+  inputEl.addEventListener('touchend',(e)=>{e.stopPropagation();},true);
+  chipsBox.addEventListener('touchend',(e)=>{e.stopPropagation();},true);
+  inputEl.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.stopPropagation();handleInput(inputEl.value);}});
+
+  })();
+  </script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC3WGMksEBOIPfwBpe1I7AZzI_086QZZwg",
+      authDomain: "chikito-81ea3.firebaseapp.com",
+      projectId: "chikito-81ea3",
+      storageBucket: "chikito-81ea3.firebasestorage.app",
+      messagingSenderId: "629840143889",
+      appId: "1:629840143889:web:fbaef1ab9ba250a393b3b0",
+      measurementId: "G-5889ZDYJTT"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Make db available to the main script
+    window._chkFirebase = { app, db };
+    console.log('✅ Firebase Firestore connected — CHiKito logging active');
+  </script>
+</body>
+</html>
